@@ -338,20 +338,65 @@ KnitMarkdown = Object clone {
     _info(info) {
         s = info
         ((s startsWith("{")) && (s endsWith("}"))) ifTrue { s = s slice(1, s length - 1) }
-        words = ((s replace(",", " ")) split(" ")) filter { |w| w != "" }
+        words = KnitMarkdown _words(s)
         opts = #{}
         (words size == 0) ifTrue { return ["", opts] }
         lang = (words at(0)) lower
         (words slice(1, words size)) each { |w|
             eq = w indexOf("=")
             (eq > 0) ifTrue {
-                v = (KnitMarkdown _unquote(w slice(eq + 1, w length))) lower
-                opts set(w slice(0, eq), (v == "true") ifTrue { true } ifFalse { (v == "false") ifTrue { false } ifFalse { v } })
+                raw = (w slice(eq + 1, w length)) trim
+                v = KnitMarkdown _unquote(raw)
+                (v == raw) ifTrue {
+                    ((v lower) == "true") ifTrue { v = true }
+                    ((v lower) == "false") ifTrue { v = false }
+                }
+                opts set((w slice(0, eq)) trim, v)
             } ifFalse {
                 (w == "norun") ifTrue { opts set("eval", false) } ifFalse { opts set(w, true) }
             }
         }
         [lang, opts]
+    }
+
+    // Chunk options split at spaces and commas, but not inside quotes, and
+    // not around an = (caption = "A, B")
+    _words(s) {
+        out = []
+        cur = ""
+        quote = 0
+        i = 0
+        n = s length
+        { i < n } whileTrue {
+            c = s byteAt(i)
+            (quote != 0) ifTrue {
+                ((c == 92) && (i + 1 < n)) ifTrue {
+                    cur = cur + (s slice(i + 1, i + 2))
+                    i = i + 1
+                } ifFalse {
+                    cur = cur + (s slice(i, i + 1))
+                    (c == quote) ifTrue { quote = 0 }
+                }
+            } ifFalse {
+                ((c == 34) || (c == 39)) ifTrue { quote = c }
+                ((c == 32) || (c == 44) || (c == 9)) ifTrue {
+                    // "a = b": the = joins the words around it
+                    j = i
+                    { (j < n) && ((s byteAt(j) == 32) || (s byteAt(j) == 9)) } whileTrue { j = j + 1 }
+                    ((c != 44) && (j < n) && (s byteAt(j) == 61) && (cur != "")) ifTrue {
+                        i = j - 1
+                    } ifFalse {
+                        ((cur endsWith("=")) && (c != 44)) ifFalse {
+                            (cur != "") ifTrue { out push(cur) }
+                            cur = ""
+                        }
+                    }
+                } ifFalse { cur = cur + (s slice(i, i + 1)) }
+            }
+            i = i + 1
+        }
+        (cur != "") ifTrue { out push(cur) }
+        out
     }
 
     _headingLevel(t) {

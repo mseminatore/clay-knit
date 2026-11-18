@@ -213,6 +213,8 @@ KnitDoc = Object clone {
         self _codeSize = 9
         self _chunkOpts = #{}
         self _tables = 0          // captioned tables so far
+        self _figures = 0         // captioned figures so far
+        self _figureCaption = []
         self
     }
 
@@ -226,13 +228,13 @@ KnitDoc = Object clone {
     // After chunk k: what it printed, and its figure
     chunkEnd(k, text) {
         show = (_chunkOpts get("output")) != false
-        results = _chunkOpts get("results")
+        results = ((_chunkOpts get("results")) ?? "") toString lower
         ((text != "") && show && (results != "hide")) ifTrue {
             (results == "asis") ifTrue { self _markdown(text) } ifFalse { self _output(text) }
         }
         fig = Plot current
         ((fig != nil) && (fig axesList size > 0)) ifTrue {
-            show ifTrue { self _figure(fig) }
+            show ifTrue { self _figure(fig, (_chunkOpts get("caption")) ?? (_chunkOpts get("fig.cap"))) }
         }
         Plot close
         _flow space(6)
@@ -280,7 +282,7 @@ KnitDoc = Object clone {
         (kind == "quote") ifTrue { return self _para(KnitMarkdown runs(b get("text"), false, "#555555"), 18) }
         ((kind == "code") || (kind == "chunk")) ifTrue { return self _code(b get("code"), "#f3f3f3") }
         (kind == "table") ifTrue { return self _table(b) }
-        (kind == "image") ifTrue { return self _image(b get("path")) }
+        (kind == "image") ifTrue { return self _image(b get("path"), b get("alt")) }
         (kind == "rule") ifTrue {
             page = _flow ensure(12)
             y = _flow y + 6
@@ -377,7 +379,7 @@ KnitDoc = Object clone {
             (background != nil) ifTrue {
                 page fillColor(background) fillRect(_flow x, _flow y, w, top + lh + bottom)
             }
-            page font("Courier", size) fillColor("#1a1a1a")
+            page font("Courier", size) fillColor("#1a1a1a") textAlign("left")
             page text(_flow x + pad, _flow y + top + ascent + (lh - size) / 2, row)
             _flow space(top + lh + bottom)
             i = i + 1
@@ -433,18 +435,14 @@ KnitDoc = Object clone {
         cap = b get("caption")
         (cap != nil) ifTrue {
             self _tables = _tables + 1
-            caption = Pdf wrapRuns([["Table " + _tables toString + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(cap), avail, size)
+            caption = self _caption("Table " + _tables toString, cap)
         }
         capH = (caption size > 0) ifTrue { caption size * lh + 4 } ifFalse { 0 }
         _flow space(4)
         // keep the caption and header with the first row
         page = _flow ensure(capH + ((head != nil) ifTrue { head at(1) } ifFalse { 0 }) +
             ((rows size > 0) ifTrue { (self _tableCells(rows first, widths, pad, size, lh)) at(1) } ifFalse { 0 }))
-        ascent = Pdf ascent("Helvetica", size)
-        caption each { |l|
-            page runs(_flow x + (avail - (l at(1))) / 2, _flow y + ascent, l at(0), size)
-            _flow space(lh)
-        }
+        self _drawCaption(caption)
         (capH > 0) ifTrue { _flow space(4) }
         self _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh)
         rows each { |r|
@@ -527,17 +525,57 @@ KnitDoc = Object clone {
     }
 
     // A figure at its own size, or narrowed to the text width
-    _figure(fig) {
+    // A figure at its own size, or narrowed to the text width, with its
+    // caption (nil: none) under it
+    _figure(fig, caption = nil) {
         w = Math min(_flow width, fig widthIn * 72)
         h = w * (fig heightIn / (fig widthIn * 1.0))
-        page = _flow ensure(h)
+        page = self _figureSpace(h, caption)
         x = _flow x + (_flow width - w) / 2
         fig drawPdf(page, x, _flow y, w)
-        _flow advance(h + 10)
+        self _figureEnd(h, caption)
+    }
+
+    // Room for a figure h tall and its caption, kept on one page; numbers
+    // the caption
+    _figureSpace(h, caption) {
+        lines = []
+        ((caption != nil) && (caption != "") && (caption != true)) ifTrue {
+            self _figures = _figures + 1
+            lines = self _caption("Figure " + _figures toString, caption toString)
+        }
+        self _figureCaption = lines
+        _flow ensure(h + ((lines size > 0) ifTrue { 4 + lines size * (_size - 1) * 1.3 } ifFalse { 0 }))
+    }
+
+    _figureEnd(h, caption) {
+        _flow advance(h)
+        (_figureCaption size > 0) ifTrue {
+            _flow space(4)
+            self _drawCaption(_figureCaption)
+        }
+        _flow space(10)
+    }
+
+    // A caption's lines: "label: " in bold, then the text (Markdown),
+    // wrapped to the text width
+    _caption(label, text) {
+        Pdf wrapRuns([[label + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(text), _flow width, _size - 1)
+    }
+
+    // Caption lines, centered on the text, from the flow's place down
+    _drawCaption(lines) {
+        size = _size - 1
+        lh = size * 1.3
+        ascent = Pdf ascent("Helvetica", size)
+        lines each { |l|
+            _flow page runs(_flow x + (_flow width - (l at(1))) / 2, _flow y + ascent, l at(0), size)
+            _flow space(lh)
+        }
     }
 
     // An image file (PNG or JPEG) at a point a pixel, narrowed to the text width
-    _image(path) {
+    _image(path, alt = nil) {
         img = nil
         full = ((Knit _isAbsolute(path)) || (_dir == ".")) ifTrue { path } ifFalse { _dir + "/" + path }
         try { img = _pdf loadImage(full) } catch { |e|
@@ -545,8 +583,8 @@ KnitDoc = Object clone {
         }
         w = Math min(_flow width, img width * 0.75)
         h = w * (img height / (img width * 1.0))
-        page = _flow ensure(h)
+        page = self _figureSpace(h, alt)
         page image(img, _flow x + (_flow width - w) / 2, _flow y, w, h)
-        _flow advance(h + 10)
+        self _figureEnd(h, alt)
     }
 }

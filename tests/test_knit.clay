@@ -89,6 +89,14 @@ Test describe("Markdown tables") {
         bs = KnitMarkdown blocks(Lines of("```{clay results='asis'}\n```\n```clay results=\"hide\"\n```"))
         Test assertEqual(bs map { |b| b get("options") get("results") }, ["asis", "hide"])
     }
+    Test it("keeps quoted option values whole, with their case") {
+        bs = KnitMarkdown blocks(Lines of("```{clay caption=\"A sine, Damped\", echo = FALSE}\n```\n```clay fig.cap = 'x \\'y\\' z' eval=False\n```"))
+        o = bs first get("options")
+        Test assertEqual([o get("caption"), o get("echo")], ["A sine, Damped", false])
+        o = bs last get("options")
+        Test assertEqual([o get("fig.cap"), o get("eval")], ["x 'y' z", false])
+        Test assertEqual(KnitMarkdown _words("clay a=1,b = '2, 3'  c"), ["clay", "a=1", "b='2, 3'", "c"])
+    }
     Test it("ends a paragraph at a table") {
         bs = KnitMarkdown blocks(Lines of("text\n| a |\n|---|\n| 1 |"))
         Test assertEqual(bs map { |b| b get("kind") }, ["para", "table"])
@@ -215,6 +223,19 @@ Test describe("render") {
         Test assertTrue(pdf contains("(done) Tj"))
         Test assertFalse(pdf contains("(quiet) Tj"))
         Test assertFalse(pdf contains("(| fruit"))
+    }
+    Test it("captions and numbers figures, from chunks and images") {
+        File write(dir + "/dot.png", Image fromBytes(2, 2, 1, String fromBytes([0, 255, 255, 0])) pngBytes)
+        md = "```{clay caption=\"First, *one*\"}\nPlot plot([1, 2])\n```\n```clay fig.cap='Second'\nPlot plot([2, 1])\n```\n```clay caption=unused\n1 println\n```\n![The dot](dot.png)\n\n![](dot.png)\n"
+        File write(dir + "/figs.md", md)
+        pdf = File read(Knit render(dir + "/figs.md"))
+        Test assertTrue(pdf contains("(Figure 1: ) Tj"))
+        Test assertTrue(pdf contains("(First, ) Tj"))
+        Test assertTrue(pdf contains("(Figure 2: ) Tj"))
+        Test assertTrue(pdf contains("(Figure 3: ) Tj"))     // a chunk without a figure takes no number
+        Test assertTrue(pdf contains("(The dot) Tj"))
+        Test assertFalse(pdf contains("(Figure 4: ) Tj"))    // an image without alt text has no caption
+        Test assertFalse(pdf contains("(unused) Tj"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

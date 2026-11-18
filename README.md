@@ -49,15 +49,18 @@ A chunk is a fenced block whose language is `clay`. Options go after it, in eith
 | `eval=false` (or `norun`) | Show the code without running it |
 | `results=asis` | Lay out what it prints as Markdown: text, lists, tables... |
 | `results=hide` | Don't show what it prints (its figure still shows) |
+| `caption="..."` (or `fig.cap`) | The figure's caption |
 
-Values can be quoted, as knitr's are: `results='asis'`.
+Values can be quoted, as knitr's are (`results='asis'`), and must be if they have spaces or
+commas: `{clay caption="Sales, by quarter", echo=false}`.
 
 Chunks share their variables, as lines of one script do. What a chunk prints (`println`,
 `Console print`) appears below its code. If it leaves a figure with something plotted in it
 (`Plot plot(...)`, `Plot figure`, `Plot subplots`...), the figure is drawn after the output,
 as vector graphics at its own size (narrowed to the text width), and the next chunk starts
-with no figure. `Plot` is there without an import. Don't call `Plot show` in a report: it
-opens a viewer.
+with no figure. A caption (`caption="..."`, Markdown) goes under it as "Figure 1: ...";
+captioned figures are numbered in order. `Plot` is there without an import. Don't call
+`Plot show` in a report: it opens a viewer.
 
 Chunks run in the folder you run knit from, so they find the same bricks; `Knit dir` is the
 report's folder, for files beside it: `File read(Knit dir + "/data.csv")`.
@@ -74,7 +77,8 @@ sales.md:14: RuntimeError: no data
 Front matter (`title`, `author`, `date`, between `---` lines), headings, paragraphs,
 **bold**, *italic*, `code` and links (shown in blue), bulleted and numbered lists (nested by
 indenting), quotes, horizontal rules, other fenced code, tables, and images on a line of their
-own (`![alt](plot.png)`, PNG or JPEG, relative to the report). Pages are US Letter with 1-inch
+own (`![alt](plot.png)`, PNG or JPEG, relative to the report; the alt text, if any, is its
+caption, numbered with the figures). Pages are US Letter with 1-inch
 margins and page numbers.
 
 Tables are GitHub's: a header row, a line of `---` cells (`:--`, `:-:` and `--:` align a
@@ -125,7 +129,7 @@ show as `?`.
 
 ## Not yet
 
-- Figure captions, and cross-references to tables and figures
+- Cross-references to tables and figures
 - Math (`$x^2$`): planned through LaTeX, as SVG
 - HTML output, chunk options for figure size
 - Keeping going after an error (knitr's `error=TRUE`)

@@ -29,7 +29,7 @@ ys = xs map { |x| Math sin(x) * Math exp(0 - x / 6) }
 
 The next chunk plots the data from the one above.
 
-```clay
+```{clay caption="A damped sine, from the data above."}
 Plot figure(#{figsize: [6, 3]})
 Plot plot(xs, ys, #{label: "damped sine"})
 Plot title("A damped sine")
