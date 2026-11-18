@@ -218,7 +218,7 @@ KnitDoc = Object clone {
         (kind == "list") ifTrue { return self _list(b get("items")) }
         (kind == "quote") ifTrue { return self _para(KnitMarkdown runs(b get("text"), false, "#555555"), 18) }
         (kind == "code") ifTrue { return self _code(b get("code"), "#f3f3f3") }
-        (kind == "table") ifTrue { return self _code(b get("code"), nil) }
+        (kind == "table") ifTrue { return self _table(b) }
         (kind == "image") ifTrue { return self _image(b get("path")) }
         (kind == "rule") ifTrue {
             page = _flow ensure(12)
@@ -322,6 +322,110 @@ KnitDoc = Object clone {
             i = i + 1
         }
         _flow space(8)
+    }
+
+    // A table, centered: columns as wide as their text, or, if that is too
+    // wide, narrowed toward their longest words, wrapping; rules above, under
+    // the header and at the end; the header again on each page it runs onto
+    _table(b) {
+        size = _size - 1
+        lh = size * 1.3
+        pad = 6
+        aligns = b get("align")
+        ncol = aligns size
+        header = (b get("header")) map { |c| KnitMarkdown runs(c, true) }
+        rows = (b get("rows")) map { |r| r map { |c| KnitMarkdown runs(c) } }
+        all = [header]
+        rows each { |r| all push(r) }
+        // each column's width on one line, and its longest word's
+        nat = []
+        mins = []
+        ncol times { |j| nat push(0); mins push(0) }
+        all each { |r|
+            ncol times { |j|
+                one = Pdf wrapRuns(r at(j), 1000000, size)
+                (one size > 0) ifTrue { nat setAt(j, Math max(nat at(j), (one at(0)) at(1) + 2 * pad)) }
+                (Pdf wrapRuns(r at(j), 0, size)) each { |l| mins setAt(j, Math max(mins at(j), (l at(1)) + 2 * pad)) }
+            }
+        }
+        avail = _flow width
+        total = 0
+        nat each { |w| total = total + w }
+        widths = nat
+        (total > avail) ifTrue {
+            least = 0
+            mins each { |w| least = least + w }
+            widths = (least >= avail) ifTrue { mins map { |w| w * avail / (least * 1.0) } } ifFalse {
+                k = (avail - least) / ((total - least) * 1.0)
+                (0..(ncol - 1)) map { |j| (mins at(j)) + ((nat at(j)) - (mins at(j))) * k }
+            }
+            total = avail
+        }
+        x0 = _flow x + (avail - total) / 2
+        x1 = x0 + total
+        cut = (0..(ncol - 1)) map { |j| (widths at(j)) < (mins at(j)) }
+        head = self _tableCells(header, widths, pad, size, lh)
+        _flow space(4)
+        // keep the header with the first row
+        page = _flow ensure((head at(1)) + ((rows size > 0) ifTrue { (self _tableCells(rows first, widths, pad, size, lh)) at(1) } ifFalse { 0 }))
+        self _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh)
+        rows each { |r|
+            cells = self _tableCells(r, widths, pad, size, lh)
+            before = _flow page
+            y = _flow y
+            page = _flow ensure(cells at(1))
+            (page != before) ifTrue {
+                before strokeColor("#000000") lineWidth(0.8) line(x0, y, x1, y)
+                self _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh)
+            }
+            self _tableRow(page, cells at(0), widths, aligns, cut, x0, _flow y, pad, size, lh)
+            _flow space(cells at(1))
+        }
+        _flow page strokeColor("#000000") lineWidth(0.8) line(x0, _flow y, x1, _flow y)
+        _flow space(_size)
+    }
+
+    // A row's cells wrapped to the columns, and the row's height: [cells, height]
+    _tableCells(row, widths, pad, size, lh) {
+        lines = 1
+        cells = (0..(row size - 1)) map { |j|
+            c = Pdf wrapRuns(row at(j), (widths at(j)) - 2 * pad + 0.01, size)
+            lines = Math max(lines, c size)
+            c
+        }
+        [cells, lines * lh + 6]
+    }
+
+    _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh) {
+        page = _flow page
+        page strokeColor("#000000") lineWidth(0.8) line(x0, _flow y, x1, _flow y)
+        self _tableRow(page, head at(0), widths, aligns, cut, x0, _flow y, pad, size, lh)
+        _flow space(head at(1))
+        page strokeColor("#000000") lineWidth(0.4) line(x0, _flow y, x1, _flow y)
+    }
+
+    // Draw a row's wrapped cells with its top at y; a cell narrower than its
+    // longest word (cut) is clipped to its column
+    _tableRow(page, cells, widths, aligns, cut, x0, y, pad, size, lh) {
+        ascent = Pdf ascent("Helvetica", size)
+        x = x0
+        j = 0
+        cells each { |lines|
+            w = widths at(j)
+            a = aligns at(j)
+            (cut at(j)) ifTrue { page save clipRect(x, y, w, (lines size) * lh + 6) }
+            ly = y + 3 + ascent + (lh - size) / 2
+            lines each { |l|
+                dx = pad
+                (a == "center") ifTrue { dx = (w - (l at(1))) / 2 }
+                (a == "right") ifTrue { dx = w - pad - (l at(1)) }
+                page runs(x + dx, ly, l at(0), size)
+                ly = ly + lh
+            }
+            (cut at(j)) ifTrue { page restore }
+            x = x + w
+            j = j + 1
+        }
     }
 
     // A chunk's printed output: like code, with a rule down its left side

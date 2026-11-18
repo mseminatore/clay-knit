@@ -10,7 +10,10 @@
 //   code     a fenced block that is not Clay: "lang", "code" (Array of lines)
 //   chunk    a ```clay block: "index" (0, 1, ...), "code", "options" (Dict),
 //            "open" and "close" (the fence lines; close is nil if unclosed)
-//   table    lines starting with "|", kept as they are: "code"
+//   table    a header row, a delimiter row (|---|:--:|) and rows: "header" and
+//            each of "rows" an Array of cell texts (rows padded or cut to the
+//            header's size), "align" ("left", "center", "right" a column),
+//            "code" (the lines as they are)
 //   image    a paragraph that is only ![alt](path): "alt", "path"
 //   rule     ---, *** or ___
 //
@@ -87,13 +90,19 @@ KnitMarkdown = Object clone {
                                 }
                                 out push(#{kind: "quote", line: start, text: parts join(" ")})
                             } ifFalse {
-                                (t startsWith("|")) ifTrue {
+                                (KnitMarkdown _isTable(lines, i)) ifTrue {
+                                    code = [t, (lines at(i + 1)) trim]
+                                    header = KnitMarkdown cells(t)
+                                    ncol = header size
+                                    i = i + 2
                                     rows = []
-                                    { (i < n) && (((lines at(i)) trim) startsWith("|")) } whileTrue {
-                                        rows push((lines at(i)) trim)
+                                    { (i < n) && (((lines at(i)) trim) != "") && ((lines at(i)) contains("|")) } whileTrue {
+                                        code push((lines at(i)) trim)
+                                        rows push(KnitMarkdown _pad(KnitMarkdown cells(lines at(i)), ncol))
                                         i = i + 1
                                     }
-                                    out push(#{kind: "table", line: start, code: rows})
+                                    out push(#{kind: "table", line: start, header: header, align: KnitMarkdown _aligns(code at(1)),
+                                        rows: rows, code: code})
                                 } ifFalse {
                                     (KnitMarkdown _item(line) != nil) ifTrue {
                                         items = []
@@ -121,7 +130,8 @@ KnitMarkdown = Object clone {
                                         out push(#{kind: "list", line: start, items: items})
                                     } ifFalse {
                                         parts = []
-                                        { (i < n) && (KnitMarkdown _continues(lines at(i))) } whileTrue {
+                                        { (i < n) && (KnitMarkdown _continues(lines at(i))) &&
+                                            ((parts size == 0) || (KnitMarkdown _isTable(lines, i) == false)) } whileTrue {
                                             parts push((lines at(i)) trim)
                                             i = i + 1
                                         }
@@ -342,8 +352,64 @@ KnitMarkdown = Object clone {
         t = line trim
         (t == "") ifTrue { return false }
         ((KnitMarkdown _fence(t) != nil) || (KnitMarkdown _headingLevel(t) > 0) || (t startsWith(">")) ||
-            (t startsWith("|")) || (KnitMarkdown _isRule(t)) || (KnitMarkdown _item(line) != nil)) ifTrue { return false }
+            (KnitMarkdown _isRule(t)) || (KnitMarkdown _item(line) != nil)) ifTrue { return false }
         true
+    }
+
+    // A table row's cells, trimmed: split at | (but not \|, which is a |
+    // in the cell), the |s at the ends optional
+    cells(row) {
+        t = row trim
+        (t startsWith("|")) ifTrue { t = t slice(1, t length) }
+        ((t endsWith("|")) && ((t endsWith("\\|")) == false)) ifTrue { t = t slice(0, t length - 1) }
+        out = []
+        start = 0
+        i = 0
+        n = t length
+        { i < n } whileTrue {
+            c = t byteAt(i)
+            ((c == 92) && (i + 1 < n)) ifTrue { i = i + 2 } ifFalse {
+                (c == 124) ifTrue {
+                    out push(t slice(start, i))
+                    start = i + 1
+                }
+                i = i + 1
+            }
+        }
+        out push(t slice(start, n))
+        out map { |cell| (cell replace("\\|", "|")) trim }
+    }
+
+    // Is line i a table's header: a line with a |, then a delimiter row
+    // (|---|:--:|) with as many cells?
+    _isTable(lines, i) {
+        (i + 1 >= lines size) ifTrue { return false }
+        head = (lines at(i)) trim
+        (head contains("|")) ifFalse { return false }
+        aligns = KnitMarkdown _aligns((lines at(i + 1)) trim)
+        (aligns != nil) && (aligns size == (KnitMarkdown cells(head)) size)
+    }
+
+    // A delimiter row's column alignments ("left", "center", "right"), else nil
+    _aligns(t) {
+        (t contains("|")) ifFalse { return nil }
+        out = []
+        ok = true
+        (KnitMarkdown cells(t)) each { |cell|
+            left = cell startsWith(":")
+            right = (cell endsWith(":")) && (cell length > 1)
+            mid = cell slice(left ifTrue { 1 } ifFalse { 0 }, right ifTrue { cell length - 1 } ifFalse { cell length })
+            ((mid length == 0) || ((mid replace("-", "")) != "")) ifTrue { ok = false }
+            out push((left && right) ifTrue { "center" } ifFalse { right ifTrue { "right" } ifFalse { "left" } })
+        }
+        ok ifTrue { out } ifFalse { nil }
+    }
+
+    // cells cut or filled with "" to n
+    _pad(cells, n) {
+        out = cells slice(0, Math min(n, cells size))
+        { out size < n } whileTrue { out push("") }
+        out
     }
 
     // ![alt](path) alone: [alt, path], else nil

@@ -51,7 +51,37 @@ Test describe("Markdown blocks") {
         Test assertEqual(bs map { |b| b get("kind") }, ["quote", "rule", "table", "image"])
         Test assertEqual(bs first get("text"), "a b")
         Test assertEqual(bs at(2) get("code") size, 2)
+        Test assertEqual(bs at(2) get("header"), ["x", "y"])
+        Test assertEqual(bs at(2) get("rows"), [])
         Test assertEqual([bs at(3) get("alt"), bs at(3) get("path")], ["a plot", "fig.png"])
+    }
+}
+
+Test describe("Markdown tables") {
+    Test it("reads cells, alignments and rows") {
+        bs = KnitMarkdown blocks(Lines of("| a | b | c | d |\n|---|:--|:-:|--:|\n| 1 | **2** | 3 | 4 |\n|5|6\n| 7 | 8 | 9 | 10 | 11 |\n\nafter"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["table", "para"])
+        t = bs first
+        Test assertEqual(t get("header"), ["a", "b", "c", "d"])
+        Test assertEqual(t get("align"), ["left", "left", "center", "right"])
+        Test assertEqual(t get("rows"), [["1", "**2**", "3", "4"], ["5", "6", "", ""], ["7", "8", "9", "10"]])
+        Test assertEqual(t get("code") size, 5)
+    }
+    Test it("splits at pipes but not escaped ones, ends optional") {
+        Test assertEqual(KnitMarkdown cells("a \\| b | `c` |"), ["a | b", "`c`"])
+        bs = KnitMarkdown blocks(Lines of("Name | Size\n--- | ---:\nx | 1"))
+        Test assertEqual(bs first get("kind"), "table")
+        Test assertEqual(bs first get("align"), ["left", "right"])
+        Test assertEqual(bs first get("rows"), [["x", "1"]])
+    }
+    Test it("needs a delimiter row with as many cells") {
+        bs = KnitMarkdown blocks(Lines of("| a | b |\n| just text |\n\n| a | b |\n|---|\n\nx | y\n---"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["para", "para", "para", "rule"])
+        Test assertEqual(bs first get("text"), "| a | b | | just text |")
+    }
+    Test it("ends a paragraph at a table") {
+        bs = KnitMarkdown blocks(Lines of("text\n| a |\n|---|\n| 1 |"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["para", "table"])
     }
 }
 
@@ -137,6 +167,15 @@ Test describe("render") {
         Test assertTrue(File exists(dir + "/opts.md.clay"))
         File delete(out)
         File delete(dir + "/opts.md.clay")
+    }
+    Test it("draws tables with their cells styled and aligned") {
+        File write(dir + "/table.md", "| Item | Count |\n|:--|--:|\n| **apples** | 3 |\n| pears | 12 |\n")
+        pdf = File read(Knit render(dir + "/table.md"))
+        Test assertTrue(pdf contains("(Item) Tj"))
+        Test assertTrue(pdf contains("(apples) Tj"))
+        Test assertTrue(pdf contains("(12) Tj"))
+        Test assertFalse(pdf contains("|"))
+        Test assertTrue(pdf contains("/Helvetica-Bold"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

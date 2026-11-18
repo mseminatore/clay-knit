@@ -69,9 +69,22 @@ sales.md:14: RuntimeError: no data
 
 Front matter (`title`, `author`, `date`, between `---` lines), headings, paragraphs,
 **bold**, *italic*, `code` and links (shown in blue), bulleted and numbered lists (nested by
-indenting), quotes, horizontal rules, other fenced code, and images on a line of their own
-(`![alt](plot.png)`, PNG or JPEG, relative to the report). Pages are US Letter with 1-inch
+indenting), quotes, horizontal rules, other fenced code, tables, and images on a line of their
+own (`![alt](plot.png)`, PNG or JPEG, relative to the report). Pages are US Letter with 1-inch
 margins and page numbers.
+
+Tables are GitHub's: a header row, a line of `---` cells (`:--`, `:-:` and `--:` align a
+column left, center or right), and rows; the `|`s at the ends are optional, and `\|` is a `|`
+in a cell. Cells can be styled. A table is centered, each column as wide as its text; one too
+wide for the page has its columns narrowed toward their longest words and wraps their text. A
+long table continues on the next page under its header again.
+
+```markdown
+| Quarter | Sales | Note        |
+|:--------|------:|-------------|
+| Q1      |    12 | first       |
+| Q2      |    30 | **best**    |
+```
 
 Text uses the standard PDF fonts (Helvetica, and Courier for code), so it covers
 Windows-1252: Western European letters, `°`, `€`, curly quotes and dashes. Other characters
@@ -79,7 +92,7 @@ show as `?`.
 
 ## Not yet
 
-- Tables are shown as their Markdown source
+- Tables made by a chunk (knitr's `results='asis'`), table captions
 - Math (`$x^2$`): planned through LaTeX, as SVG
 - HTML output, chunk options for figure size, captions, cross-references
 - Keeping going after an error (knitr's `error=TRUE`)
