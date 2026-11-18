@@ -78,6 +78,14 @@ Knit = Object clone {
                 }
             }
         }
+        // inline code: each `{clay} expr` evaluated on its own line
+        k = 0
+        (KnitMarkdown inlineSpans(lines)) each { |sp|
+            call = "Knit _inline(" + k toString + ", (" + (sp at(3)) + "))"
+            l = prog at(sp at(0))
+            prog setAt(sp at(0), (l == "") ifTrue { call } ifFalse { l + "; " + call })
+            k = k + 1
+        }
         start = "import(\"knit\"); Knit _start(" + (Knit _quote(path)) + ", " + (Knit _quote(out)) + ")"
         first = prog at(0)
         prog setAt(0, (first == "") ifTrue { start } ifFalse { start + "; " + first })
@@ -149,6 +157,12 @@ Knit = Object clone {
         Console beginCapture
     }
 
+    // An inline expression's value, as text, for span k
+    _inline(k, v) { _doc inline(k, v) }
+
+    // x with digits decimal places, as text: for inline code, `{clay} Knit fixed(mean, 2)`
+    fixed(x, digits) { Knit _fixed(x, digits) }
+
     _end(k) {
         text = Console endCapture
         _doc chunkEnd(k, text)
@@ -216,7 +230,9 @@ KnitDoc = Object clone {
         self _path = path
         self _dir = Knit _dir(path)
         lines = ((File read(path)) replace("\r\n", "\n")) split("\n")
-        self _blocks = KnitMarkdown blocks(lines)
+        // inline code becomes placeholders, for the values once they are known
+        self _blocks = KnitMarkdown blocks(KnitMarkdown withPlaceholders(lines))
+        self _values = []
         self _next = 0            // the next block to lay out
         self _pdf = Pdf new("letter")
         self _flow = _pdf flow(72)
@@ -231,6 +247,12 @@ KnitDoc = Object clone {
     // The document is laid out at the end, once every chunk has run, so
     // figures and tables are numbered before any text that refers to them.
     // Until then chunk() and chunkEnd() collect what to lay out.
+
+    // Inline span k's value
+    inline(k, v) {
+        { _values size <= k } whileTrue { _values push(nil) }
+        _values setAt(k, (v == nil) ifTrue { "nil" } ifFalse { v toString })
+    }
 
     // Before chunk k runs: the text up to it, and its code
     chunk(k) {
@@ -265,6 +287,7 @@ KnitDoc = Object clone {
     finish() {
         self _collectTo(_blocks size)
         self _number
+        KnitMarkdown useValues(_values)
         _items each { |b| self _block(b) }
         (KnitMarkdown missing) each { |label|
             Console error("knit: " + _path + ": no figure or table is labelled " + label + " (@" + label + ")\n")

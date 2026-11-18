@@ -122,6 +122,33 @@ Test describe("Markdown text") {
     }
 }
 
+Test describe("inline code") {
+    Test it("finds `{clay} expr` spans outside fenced code") {
+        lines = Lines of("a `{clay} x + 1` b `{clay}y`\n```text\n`{clay} no`\n```\n``{clay} no`` \\`{clay} no\\` `{clay}  `\n```clay\n`{clay} no`\n```\nlast `{clay} z`")
+        Test assertEqual((KnitMarkdown inlineSpans(lines)) map { |sp| [sp at(0), sp at(3)] }, [[0, "x + 1"], [0, "y"], [8, "z"]])
+        sp = (KnitMarkdown inlineSpans(lines)) first
+        Test assertEqual([sp at(1), sp at(2)], [2, 16])
+    }
+    Test it("puts the values in the text, as text, styled as around them") {
+        lines = KnitMarkdown withPlaceholders(Lines of("**`{clay} a`** and `{clay} b`, `code`"))
+        KnitMarkdown useValues(["*1*", "2"])
+        r = KnitMarkdown runs(lines first)
+        Test assertEqual(r map { |p| [p at(0), p at(1)] }, [["*1*", "Helvetica-Bold"], [" and 2, ", "Helvetica"], ["code", "Courier"]])
+        KnitMarkdown useValues(nil)
+    }
+    Test it("reads code spans of several backticks") {
+        Test assertEqual((KnitMarkdown runs("``a`b`` and ` `` ` and x``y")) map { |p| p at(0) }, ["a`b", " and ", " `` ", " and x``y"])
+    }
+    Test it("evaluates each span on its line of the program") {
+        p = Lines of(Knit program("`{clay} 1`\n\ntext `{clay} a` and `{clay} b c`", "r.md", "r.pdf"))
+        Test assertTrue(p first endsWith("; Knit _inline(0, (1))"))
+        Test assertEqual(p at(2), "Knit _inline(1, (a)); Knit _inline(2, (b c))")
+    }
+    Test it("formats numbers") {
+        Test assertEqual([Knit fixed(16.75, 1), Knit fixed(2, 2)], ["16.8", "2.00"])
+    }
+}
+
 Test describe("cross-references") {
     Test it("reads labels on chunks, images and table captions") {
         md = "```{clay #fig-a caption=\"A\"}\n```\n```clay label=fig-b\n```\n![dot](d.png){#fig-c}\n\n| x |\n|---|\n\nTable: Cap. {#tbl-d}\n\n| y |\n|---|\n\nTable: {#tbl-e}"
@@ -271,6 +298,21 @@ Test describe("render") {
         Test assertTrue(pdf contains("(After: Figure 1.) Tj"))
         Test assertTrue(pdf contains("(Figure 1) Tj"))              // a label without a caption: the number alone
         Test assertTrue(pdf contains("(Table 2) Tj"))
+    }
+    Test it("fills in inline code, in order with the chunks") {
+        md = "---\ntitle: Year `{clay} 2026`\n---\n```clay\nxs = [1, 2, 3]\n```\nSum `{clay} xs sum`, mean `{clay} Knit fixed(xs sum / 3.0, 1)`.\n\n| n |\n|---|\n| `{clay} xs filter { |v| v > 1 }` |\n\n```clay\nxs = [10]\n```\nNow `{clay} xs sum`.\n"
+        File write(dir + "/inline.md", md)
+        pdf = File read(Knit render(dir + "/inline.md"))
+        Test assertTrue(pdf contains("(Sum 6, mean 2.0.) Tj"))
+        Test assertTrue(pdf contains("([2, 3]) Tj"))
+        Test assertTrue(pdf contains("(Now 10.) Tj"))
+        Test assertTrue(pdf contains("/Title (Year 2026)"))
+    }
+    Test it("reports an inline error at its line") {
+        File write(dir + "/badinline.md", "# Bad\n\nok `{clay} 1`\n\nnot `{clay} 1 / 0`\n")
+        e = Test assertRaises({ Knit render(dir + "/badinline.md") })
+        Test assertTrue(e message contains("badinline.md:5"))
+        Test assertTrue(e message contains("DivisionByZero"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

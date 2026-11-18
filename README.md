@@ -72,10 +72,30 @@ knit: sales.md failed:
 sales.md:14: RuntimeError: no data
 ```
 
+## Inline code
+
+`` `{clay} expr` `` in the text is replaced by the expression's value, so numbers in sentences
+follow the data:
+
+````markdown
+```clay
+sales = [12, 30, 7, 18]
+```
+
+Total sales were `{clay} sales sum` units, a mean of `{clay} Knit fixed(sales sum / 4.0, 2)`.
+````
+
+gives "Total sales were 67 units, a mean of 16.75." An expression runs where it is in the
+report, after the chunks above it, and its value (`toString`, `nil` as "nil") goes in as plain
+text in the style around it: `` **`{clay} x`** `` is bold. `Knit fixed(x, digits)` writes a
+number with that many decimal places. It works in paragraphs, headings, lists, table cells and
+the front matter's title, not in fenced code; an error in one is reported at its line. To show
+the syntax itself, use two backticks (``` ``{clay} x`` ```) or escape the first one.
+
 ## Markdown
 
 Front matter (`title`, `author`, `date`, between `---` lines), headings, paragraphs,
-**bold**, *italic*, `code` and links (shown in blue), bulleted and numbered lists (nested by
+**bold**, *italic*, `code` (and ``` ``code with ` in it`` ```) and links (shown in blue), bulleted and numbered lists (nested by
 indenting), quotes, horizontal rules, other fenced code, tables, and images on a line of their
 own (`![alt](plot.png)`, PNG or JPEG, relative to the report; the alt text, if any, is its
 caption, numbered with the figures). Pages are US Letter with 1-inch
@@ -169,7 +189,8 @@ used twice) on stderr. Other `@`s, as in `me@example.com`, are left alone.
 
 `Knit render` writes a Clay program beside the report (`report.md.clay`, deleted afterwards
 unless `#{keep: true}`) whose line *n* is the report's line *n*: each chunk's code where it
-is, the text as blank lines, and on the fence lines calls into `Knit`. It runs that with the
+is, the text as blank lines (but for inline code, which runs on its line), and on the fence
+lines calls into `Knit`. It runs that with the
 `clay` command, so line numbers in errors are the report's. As the program runs it collects
 the report: the text up to a chunk, the chunk's code, then what `Console capture` collected
 while it ran, and its figure. When the last chunk has run it numbers the tables and figures,

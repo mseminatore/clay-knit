@@ -27,7 +27,8 @@ ys = xs map { |x| Math sin(x) * Math exp(0 - x / 6) }
 ("peak: " + (ys reduce(0) { |m, y| Math max(m, y) }) toString) println
 ```
 
-The next chunk plots the data from the one above, as @fig-sine.
+The data has `{clay} xs size` points and peaks at `{clay} Knit fixed(ys reduce(0) { |m, y| Math max(m, y) }, 3)`.
+The next chunk plots it, as @fig-sine.
 
 ```{clay #fig-sine caption="A damped sine, from the data above."}
 Plot figure(#{figsize: [6, 3]})

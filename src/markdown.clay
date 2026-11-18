@@ -24,6 +24,7 @@
 KnitMarkdown = Object clone {
     _refs = nil
     _missing = nil
+    _values = nil
 
     blocks(lines) {
         out = []
@@ -224,6 +225,17 @@ KnitMarkdown = Object clone {
                 i = i + 2
                 handled = true
             }
+            // an inline value's placeholder: \x01 n \x01
+            ((handled == false) && (c == 1)) ifTrue {
+                end = KnitMarkdown _find(b, 1, i + 1)
+                (end > 0) ifTrue {
+                    k = try { (String fromBytes(b slice(i + 1, end))) toInt } catch { |e| nil }
+                    v = ((_values != nil) && (k != nil) && (k < _values size)) ifTrue { _values at(k) } ifFalse { "?" }
+                    buf = buf + ((v ?? "?") bytes)
+                    i = end + 1
+                    handled = true
+                }
+            }
             // @label: "Figure 2"; an unknown @fig-x or @tbl-x is "?@fig-x", in red
             ((handled == false) && (c == 64)) ifTrue {
                 ref = KnitMarkdown _ref(b, i)
@@ -245,13 +257,26 @@ KnitMarkdown = Object clone {
                     }
                 }
             }
-            // `code`
+            // `code`, or ``code`` (with ` in it): a run of backticks, closed by
+            // a run as long; the space just inside each end is dropped
             ((handled == false) && (c == 96)) ifTrue {
-                close = KnitMarkdown _find(b, 96, i + 1)
+                k = i
+                { (k < n) && (b at(k) == 96) } whileTrue { k = k + 1 }
+                ticks = k - i
+                close = KnitMarkdown _ticks(b, ticks, k)
                 (close > 0) ifTrue {
                     flush value
-                    out push([text slice(i + 1, close), "Courier", color])
-                    i = close + 1
+                    code = text slice(k, close)
+                    ((ticks > 1) && (code length > 1) && (code startsWith(" ")) && (code endsWith(" "))) ifTrue {
+                        code = code slice(1, code length - 1)
+                    }
+                    out push([code, "Courier", color])
+                    i = close + ticks
+                    handled = true
+                } ifFalse {
+                    // no closing run: the backticks as they are
+                    buf = buf + (b slice(i, k))
+                    i = k
                     handled = true
                 }
             }
@@ -328,6 +353,21 @@ KnitMarkdown = Object clone {
         n = b size
         { (i < n) && (b at(i) != c) } whileTrue { i = i + 1 }
         (i < n) ifTrue { i } ifFalse { -1 }
+    }
+
+    // Where a run of exactly n backticks starts, from byte from on, or -1
+    _ticks(b, n, from) {
+        i = from
+        size = b size
+        { i < size } whileTrue {
+            (b at(i) == 96) ifTrue {
+                k = i
+                { (k < size) && (b at(k) == 96) } whileTrue { k = k + 1 }
+                ((k - i) == n) ifTrue { return i }
+                i = k
+            } ifFalse { i = i + 1 }
+        }
+        -1
     }
 
     // Is byte i whitespace, or outside the text?
@@ -544,6 +584,73 @@ KnitMarkdown = Object clone {
         ((t endsWith("}")) && (start >= 0) && ((t slice(start, t length)) contains(" ") == false)) ifFalse { return [t, nil] }
         [(t slice(0, start)) trim, t slice(start + 2, t length - 1)]
     }
+
+    // ---- inline code ---------------------------------------------------------
+
+    // The inline Clay expressions in a report's lines, `{clay} expr`, outside
+    // fenced code, in order: [line, start, end, expr] each, start and end the
+    // span's bytes (its backticks included)
+    inlineSpans(lines) {
+        out = []
+        fence = nil
+        i = 0
+        lines each { |line|
+            t = line trim
+            (fence != nil) ifTrue {
+                ((t startsWith(fence)) && ((t replace("`", "")) == "")) ifTrue { fence = nil }
+            } ifFalse {
+                f = KnitMarkdown _fence(t)
+                (f != nil) ifTrue { fence = f at(0) } ifFalse {
+                    (KnitMarkdown _spansIn(line)) each { |sp| out push([i, sp at(0), sp at(1), sp at(2)]) }
+                }
+            }
+            i = i + 1
+        }
+        out
+    }
+
+    // [start, end, expr] of each `{clay} expr` in a line: one backtick (not
+    // two, not escaped), {clay}, the expression, a backtick
+    _spansIn(line) {
+        out = []
+        b = line bytes
+        n = b size
+        from = 0
+        going = true
+        { going } whileTrue {
+            at = (line slice(from, n)) indexOf("`{clay}")
+            (at < 0) ifTrue { going = false } ifFalse {
+                at = at + from
+                close = KnitMarkdown _find(b, 96, at + 7)
+                (close < 0) ifTrue { going = false } ifFalse {
+                    lone = ((at == 0) || (((b at(at - 1)) != 96) && ((b at(at - 1)) != 92)))
+                    expr = (line slice(at + 7, close)) trim
+                    (lone && (expr != "")) ifTrue { out push([at, close + 1, expr]) }
+                    from = close + 1
+                }
+            }
+        }
+        out
+    }
+
+    // The lines with each inline span made a placeholder for its value (the
+    // value goes in when the text is laid out, as it is, not as Markdown)
+    withPlaceholders(lines) {
+        spans = KnitMarkdown inlineSpans(lines)
+        out = lines map { |l| l }
+        // last first on each line, so the earlier spans' places hold
+        k = spans size - 1
+        { k >= 0 } whileTrue {
+            sp = spans at(k)
+            l = out at(sp at(0))
+            out setAt(sp at(0), (l slice(0, sp at(1))) + "\x01" + k toString + "\x01" + (l slice(sp at(2), l length)))
+            k = k - 1
+        }
+        out
+    }
+
+    // The inline values, an Array by span number (set by KnitDoc)
+    useValues(values) { self _values = values }
 
     // ---- references ----------------------------------------------------------
 

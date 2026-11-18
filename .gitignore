@@ -3,3 +3,5 @@ bricks/
 # knitted reports and the programs knit writes
 *.pdf
 *.md.clay
+
+.DS_Store
