@@ -46,11 +46,14 @@ Knit = Object clone {
         clay = o get("clay") ?? Knit _clay
         r = Process run([clay, gen])
         (o get("keep") == true) ifFalse { File delete(gen) }
+        name = Knit _base(path)
         (r ok) ifFalse {
             msg = ((r stderr) + (r stdout)) trim
-            name = Knit _base(path)
             raise("knit: " + path + " failed:\n" + (msg replace(name + ".clay", name)))
         }
+        // warnings (unknown references...), and what the chunks wrote to stderr
+        warn = (r stderr) trim
+        (warn != "") ifTrue { Console error((warn replace(name + ".clay", name)) + "\n") }
         out
     }
 
@@ -97,7 +100,8 @@ Knit = Object clone {
     // or Dicts (the first one's keys are the columns). opts: header (the
     // column names), align ("l", "c", "r" or "left", "center", "right" a
     // column; columns of numbers go right, others left), digits (decimal
-    // places, for columns with numbers that are not whole), caption
+    // places, for columns with numbers that are not whole), caption, label
+    // (for @label references)
     table(rows, opts = nil) {
         o = opts ?? #{}
         dicts = (rows size > 0) && ((rows first type) == "Dict")
@@ -127,7 +131,13 @@ Knit = Object clone {
         head = (0..(ncol - 1)) map { |j| ((header != nil) && (j < header size)) ifTrue { Knit _cell(header at(j)) } ifFalse { "" } }
         lines = []
         cap = o get("caption")
-        (cap != nil) ifTrue { lines push("Table: " + Knit _cell(cap)); lines push("") }
+        label = o get("label")
+        ((cap != nil) || (label != nil)) ifTrue {
+            capText = (cap != nil) ifTrue { Knit _cell(cap) } ifFalse { "" }
+            (label != nil) ifTrue { capText = (capText + " {#" + label + "}") trim }
+            lines push("Table: " + capText)
+            lines push("")
+        }
         lines push("| " + head join(" | ") + " |")
         lines push("|" + aligns join("|") + "|")
         cells size times { |i| lines push("| " + ((text map { |c| c at(i) }) join(" | ")) + " |") }
@@ -203,6 +213,7 @@ Knit = Object clone {
 KnitDoc = Object clone {
     init(path, out) {
         self _out = out
+        self _path = path
         self _dir = Knit _dir(path)
         lines = ((File read(path)) replace("\r\n", "\n")) split("\n")
         self _blocks = KnitMarkdown blocks(lines)
@@ -212,17 +223,20 @@ KnitDoc = Object clone {
         self _size = 11           // body text
         self _codeSize = 9
         self _chunkOpts = #{}
-        self _tables = 0          // captioned tables so far
-        self _figures = 0         // captioned figures so far
+        self _items = []          // what to lay out at the end: blocks, chunks' code, output, figures
         self _figureCaption = []
         self
     }
+
+    // The document is laid out at the end, once every chunk has run, so
+    // figures and tables are numbered before any text that refers to them.
+    // Until then chunk() and chunkEnd() collect what to lay out.
 
     // Before chunk k runs: the text up to it, and its code
     chunk(k) {
         b = self _upTo(k)
         self _chunkOpts = b get("options")
-        ((_chunkOpts get("echo")) != false) ifTrue { self _code(b get("code"), "#f3f3f3") }
+        ((_chunkOpts get("echo")) != false) ifTrue { _items push(#{kind: "code", code: b get("code")}) }
     }
 
     // After chunk k: what it printed, and its figure
@@ -230,19 +244,31 @@ KnitDoc = Object clone {
         show = (_chunkOpts get("output")) != false
         results = ((_chunkOpts get("results")) ?? "") toString lower
         ((text != "") && show && (results != "hide")) ifTrue {
-            (results == "asis") ifTrue { self _markdown(text) } ifFalse { self _output(text) }
+            (results == "asis") ifTrue {
+                // printed Markdown, laid out as the report's text is
+                (KnitMarkdown blocks((text replace("\r\n", "\n")) split("\n"))) each { |b|
+                    ((b get("kind")) == "front") ifFalse { _items push(b) }
+                }
+            } ifFalse { _items push(#{kind: "output", text: text}) }
         }
         fig = Plot current
-        ((fig != nil) && (fig axesList size > 0)) ifTrue {
-            show ifTrue { self _figure(fig, (_chunkOpts get("caption")) ?? (_chunkOpts get("fig.cap"))) }
+        ((fig != nil) && (fig axesList size > 0) && show) ifTrue {
+            cap = (_chunkOpts get("caption")) ?? (_chunkOpts get("fig.cap"))
+            (cap == true) ifTrue { cap = nil }
+            _items push(#{kind: "figure", fig: fig, caption: cap, label: _chunkOpts get("label")})
         }
         Plot close
-        _flow space(6)
+        _items push(#{kind: "space", height: 6})
     }
 
-    // The rest of the text; page numbers; save
+    // The rest of the text; numbering; layout; page numbers; save
     finish() {
-        self _layoutTo(_blocks size)
+        self _collectTo(_blocks size)
+        self _number
+        _items each { |b| self _block(b) }
+        (KnitMarkdown missing) each { |label|
+            Console error("knit: " + _path + ": no figure or table is labelled " + label + " (@" + label + ")\n")
+        }
         n = _pdf pageCount
         i = 0
         _pdf pages each { |page|
@@ -256,21 +282,53 @@ KnitDoc = Object clone {
 
     // ---- laying out blocks ------------------------------------------------------
 
-    // Lay out the blocks before chunk k; returns chunk k's block
+    // Collect the blocks before chunk k; returns chunk k's block
     _upTo(k) {
         i = _next
         { (i < _blocks size) && (((_blocks at(i)) get("kind") != "chunk") || ((_blocks at(i)) get("index") != k)) } whileTrue { i = i + 1 }
-        self _layoutTo(i)
+        self _collectTo(i)
         self _next = i + 1
         _blocks at(i)
     }
 
-    _layoutTo(end) {
+    _collectTo(end) {
         { _next < end } whileTrue {
-            b = _blocks at(_next)
+            _items push(_blocks at(_next))
             self _next = _next + 1
-            self _block(b)
         }
+    }
+
+    // Number the tables, and the figures and images, with a caption or a
+    // label ("Table 1", "Figure 1"... in "number"), and give the labels'
+    // numbers to KnitMarkdown, for @label references
+    _number() {
+        refs = #{}
+        tables = 0
+        figures = 0
+        _items each { |b|
+            kind = b get("kind")
+            label = b get("label")
+            caption = b get("caption")
+            (kind == "image") ifTrue { caption = ((b get("alt")) == "") ifTrue { nil } ifFalse { b get("alt") } }
+            name = nil
+            ((kind == "table") && ((caption != nil) || (label != nil))) ifTrue {
+                tables = tables + 1
+                name = "Table " + tables toString
+            }
+            (((kind == "figure") || (kind == "image")) && ((caption != nil) || (label != nil))) ifTrue {
+                figures = figures + 1
+                name = "Figure " + figures toString
+            }
+            (name != nil) ifTrue {
+                b set("number", name)
+                (label != nil) ifTrue {
+                    (refs has(label)) ifTrue {
+                        Console error("knit: " + _path + ": label " + label + " is used twice; @" + label + " is " + refs get(label) + "\n")
+                    } ifFalse { refs set(label, name) }
+                }
+            }
+        }
+        KnitMarkdown useRefs(refs)
     }
 
     _block(b) {
@@ -282,7 +340,10 @@ KnitDoc = Object clone {
         (kind == "quote") ifTrue { return self _para(KnitMarkdown runs(b get("text"), false, "#555555"), 18) }
         ((kind == "code") || (kind == "chunk")) ifTrue { return self _code(b get("code"), "#f3f3f3") }
         (kind == "table") ifTrue { return self _table(b) }
-        (kind == "image") ifTrue { return self _image(b get("path"), b get("alt")) }
+        (kind == "image") ifTrue { return self _image(b) }
+        (kind == "figure") ifTrue { return self _figure(b) }
+        (kind == "output") ifTrue { return self _output(b get("text")) }
+        (kind == "space") ifTrue { return _flow space(b get("height")) }
         (kind == "rule") ifTrue {
             page = _flow ensure(12)
             y = _flow y + 6
@@ -432,11 +493,7 @@ KnitDoc = Object clone {
         ((((b get("header")) filter { |c| c != "" }) size) == 0) ifTrue { head = nil }
         // "Table n: caption" above it, wrapped to the text width
         caption = []
-        cap = b get("caption")
-        (cap != nil) ifTrue {
-            self _tables = _tables + 1
-            caption = self _caption("Table " + _tables toString, cap)
-        }
+        (b get("number") != nil) ifTrue { caption = self _caption(b get("number"), b get("caption")) }
         capH = (caption size > 0) ifTrue { caption size * lh + 4 } ifFalse { 0 }
         _flow space(4)
         // keep the caption and header with the first row
@@ -505,13 +562,6 @@ KnitDoc = Object clone {
         }
     }
 
-    // Printed Markdown (results=asis), laid out as the report's text is
-    _markdown(text) {
-        (KnitMarkdown blocks(((text replace("\r\n", "\n")) split("\n")))) each { |b|
-            ((b get("kind")) == "front") ifFalse { self _block(b) }
-        }
-    }
-
     // A chunk's printed output: like code, with a rule down its left side
     _output(text) {
         lines = text split("\n")
@@ -524,31 +574,30 @@ KnitDoc = Object clone {
         }
     }
 
-    // A figure at its own size, or narrowed to the text width
-    // A figure at its own size, or narrowed to the text width, with its
-    // caption (nil: none) under it
-    _figure(fig, caption = nil) {
+    // A chunk's figure at its own size, or narrowed to the text width, with
+    // its caption under it
+    _figure(b) {
+        fig = b get("fig")
         w = Math min(_flow width, fig widthIn * 72)
         h = w * (fig heightIn / (fig widthIn * 1.0))
-        page = self _figureSpace(h, caption)
+        page = self _figureSpace(h, b)
         x = _flow x + (_flow width - w) / 2
         fig drawPdf(page, x, _flow y, w)
-        self _figureEnd(h, caption)
+        self _figureEnd(h)
     }
 
-    // Room for a figure h tall and its caption, kept on one page; numbers
-    // the caption
-    _figureSpace(h, caption) {
+    // Room for a figure h tall and its caption, kept on one page
+    _figureSpace(h, b) {
         lines = []
-        ((caption != nil) && (caption != "") && (caption != true)) ifTrue {
-            self _figures = _figures + 1
-            lines = self _caption("Figure " + _figures toString, caption toString)
+        (b get("number") != nil) ifTrue {
+            text = (b get("kind") == "image") ifTrue { b get("alt") } ifFalse { b get("caption") }
+            lines = self _caption(b get("number"), text)
         }
         self _figureCaption = lines
         _flow ensure(h + ((lines size > 0) ifTrue { 4 + lines size * (_size - 1) * 1.3 } ifFalse { 0 }))
     }
 
-    _figureEnd(h, caption) {
+    _figureEnd(h) {
         _flow advance(h)
         (_figureCaption size > 0) ifTrue {
             _flow space(4)
@@ -557,10 +606,11 @@ KnitDoc = Object clone {
         _flow space(10)
     }
 
-    // A caption's lines: "label: " in bold, then the text (Markdown),
-    // wrapped to the text width
-    _caption(label, text) {
-        Pdf wrapRuns([[label + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(text), _flow width, _size - 1)
+    // A caption's lines: "Figure n: " in bold, then the text (Markdown;
+    // nil or "": just "Figure n"), wrapped to the text width
+    _caption(name, text) {
+        ((text == nil) || (text toString == "")) ifTrue { return Pdf wrapRuns([[name, "Helvetica-Bold"]], _flow width, _size - 1) }
+        Pdf wrapRuns([[name + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(text toString), _flow width, _size - 1)
     }
 
     // Caption lines, centered on the text, from the flow's place down
@@ -575,7 +625,8 @@ KnitDoc = Object clone {
     }
 
     // An image file (PNG or JPEG) at a point a pixel, narrowed to the text width
-    _image(path, alt = nil) {
+    _image(b) {
+        path = b get("path")
         img = nil
         full = ((Knit _isAbsolute(path)) || (_dir == ".")) ifTrue { path } ifFalse { _dir + "/" + path }
         try { img = _pdf loadImage(full) } catch { |e|
@@ -583,8 +634,8 @@ KnitDoc = Object clone {
         }
         w = Math min(_flow width, img width * 0.75)
         h = w * (img height / (img width * 1.0))
-        page = self _figureSpace(h, alt)
+        page = self _figureSpace(h, b)
         page image(img, _flow x + (_flow width - w) / 2, _flow y, w, h)
-        self _figureEnd(h, alt)
+        self _figureEnd(h)
     }
 }

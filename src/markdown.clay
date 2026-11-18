@@ -22,6 +22,9 @@
 // **bold**, *italic* (or _italic_), `code`, [links](url) and \-escapes.
 
 KnitMarkdown = Object clone {
+    _refs = nil
+    _missing = nil
+
     blocks(lines) {
         out = []
         n = lines size
@@ -140,7 +143,7 @@ KnitMarkdown = Object clone {
                                         text = parts join(" ")
                                         img = KnitMarkdown _image(text)
                                         (img != nil) ifTrue {
-                                            out push(#{kind: "image", line: start, alt: img at(0), path: img at(1)})
+                                            out push(#{kind: "image", line: start, alt: img at(0), path: img at(1), label: img at(2)})
                                         } ifFalse {
                                             out push(#{kind: "para", line: start, text: text})
                                         }
@@ -167,15 +170,18 @@ KnitMarkdown = Object clone {
             used = false
             (cap != nil) ifTrue {
                 prev = (out size > 0) ifTrue { out at(out size - 1) } ifFalse { nil }
-                ((prev != nil) && (prev get("kind") == "table") && (prev get("caption") == nil)) ifTrue {
-                    prev set("caption", cap)
-                    used = true
+                target = nil
+                ((prev != nil) && (prev get("kind") == "table") && (prev get("caption") == nil) && (prev get("label") == nil)) ifTrue {
+                    target = prev
                 } ifFalse {
                     next = (i + 1 < n) ifTrue { blocks at(i + 1) } ifFalse { nil }
-                    ((next != nil) && (next get("kind") == "table")) ifTrue {
-                        next set("caption", cap)
-                        used = true
-                    }
+                    ((next != nil) && (next get("kind") == "table")) ifTrue { target = next }
+                }
+                (target != nil) ifTrue {
+                    parts = KnitMarkdown _label(cap)
+                    target set("caption", ((parts at(0)) == "") ifTrue { nil } ifFalse { parts at(0) })
+                    target set("label", parts at(1))
+                    used = true
                 }
             }
             used ifFalse { out push(b) }
@@ -217,6 +223,27 @@ KnitMarkdown = Object clone {
                 buf push(b at(i + 1))
                 i = i + 2
                 handled = true
+            }
+            // @label: "Figure 2"; an unknown @fig-x or @tbl-x is "?@fig-x", in red
+            ((handled == false) && (c == 64)) ifTrue {
+                ref = KnitMarkdown _ref(b, i)
+                (ref != nil) ifTrue {
+                    label = ref at(0)
+                    name = (_refs != nil) ifTrue { _refs get(label) } ifFalse { nil }
+                    (name != nil) ifTrue {
+                        buf = buf + (name bytes)
+                        i = ref at(1)
+                        handled = true
+                    } ifFalse {
+                        ((label startsWith("fig-")) || (label startsWith("tbl-"))) ifTrue {
+                            (_missing != nil) ifTrue { _missing set(label, true) }
+                            flush value
+                            out push(["?@" + label, "Helvetica-Bold", "#aa0000"])
+                            i = ref at(1)
+                            handled = true
+                        }
+                    }
+                }
             }
             // `code`
             ((handled == false) && (c == 96)) ifTrue {
@@ -353,7 +380,10 @@ KnitMarkdown = Object clone {
                 }
                 opts set((w slice(0, eq)) trim, v)
             } ifFalse {
-                (w == "norun") ifTrue { opts set("eval", false) } ifFalse { opts set(w, true) }
+                (w == "norun") ifTrue { opts set("eval", false) } ifFalse {
+                    // #fig-x: the chunk's label
+                    ((w startsWith("#")) && (w length > 1)) ifTrue { opts set("label", w slice(1, w length)) } ifFalse { opts set(w, true) }
+                }
             }
         }
         [lang, opts]
@@ -495,12 +525,53 @@ KnitMarkdown = Object clone {
         out
     }
 
-    // ![alt](path) alone: [alt, path], else nil
+    // ![alt](path) alone, maybe with {#label} after it: [alt, path, label],
+    // else nil
     _image(t) {
+        parts = KnitMarkdown _label(t)
+        t = parts at(0)
         ((t startsWith("![")) && (t endsWith(")"))) ifFalse { return nil }
         mid = t indexOf("](")
         (mid < 0) ifTrue { return nil }
-        [t slice(2, mid), t slice(mid + 2, t length - 1)]
+        [t slice(2, mid), t slice(mid + 2, t length - 1), parts at(1)]
+    }
+
+    // Text ending in {#label}: [the text before it, trimmed, label]; else
+    // [text, nil]
+    _label(t) {
+        t = t trim
+        start = t lastIndexOf("{#")
+        ((t endsWith("}")) && (start >= 0) && ((t slice(start, t length)) contains(" ") == false)) ifFalse { return [t, nil] }
+        [(t slice(0, start)) trim, t slice(start + 2, t length - 1)]
+    }
+
+    // ---- references ----------------------------------------------------------
+
+    // The labels of the numbered tables and figures: label -> "Figure 2"...
+    // (set by KnitDoc once it has numbered them)
+    useRefs(refs) {
+        self _refs = refs
+        self _missing = #{}
+    }
+
+    // The @fig-x and @tbl-x references with no label, in the order first seen
+    missing() { (_missing == nil) ifTrue { [] } ifFalse { _missing keys } }
+
+    // An @label at byte i of b: [the label, the byte after it], else nil.
+    // A label is letters, digits, -, _ and :, not ending in one of -_: (so
+    // "@fig-a." stops at the dot); the @ is not after a word character (so
+    // name@example.com is not one).
+    _ref(b, i) {
+        (KnitMarkdown _wordChar(b, i - 1)) ifTrue { return nil }
+        j = i + 1
+        { (j < b size) && (KnitMarkdown _labelChar(b at(j))) } whileTrue { j = j + 1 }
+        { (j > i + 1) && (((b at(j - 1)) == 45) || ((b at(j - 1)) == 95) || ((b at(j - 1)) == 58)) } whileTrue { j = j - 1 }
+        (j == i + 1) ifTrue { return nil }
+        [String fromBytes(b slice(i + 1, j)), j]
+    }
+
+    _labelChar(c) {
+        ((c >= 48) && (c <= 58)) || ((c >= 65) && (c <= 90)) || ((c >= 97) && (c <= 122)) || (c == 45) || (c == 95)
     }
 
     _unquote(v) {

@@ -127,9 +127,40 @@ Text uses the standard PDF fonts (Helvetica, and Courier for code), so it covers
 Windows-1252: Western European letters, `°`, `€`, curly quotes and dashes. Other characters
 show as `?`.
 
+## Cross-references
+
+Label a figure or table, and write `@label` in the text for its number ("Figure 2",
+"Table 1"), before or after it:
+
+````markdown
+@fig-sales shows the totals in @tbl-sales.
+
+```{clay #fig-sales caption="Sales by quarter."}
+Plot bar(["Q1", "Q2", "Q3", "Q4"], [12, 30, 7, 18])
+```
+
+| Quarter | Sales |
+|---------|------:|
+| Q1      |    12 |
+
+Table: Sales. {#tbl-sales}
+````
+
+| Label | |
+|---|---|
+| A chunk's figure | `{clay #fig-x}` or `label=fig-x`, among its options |
+| An image | `![alt](plot.png){#fig-x}` |
+| A table | `{#tbl-x}` at the end of its caption: `Table: Sales. {#tbl-x}` |
+| A table from data | `Knit table(rows, #{label: "tbl-x"})` |
+
+Labels are letters, digits, `-` and `_`, as Quarto's are; start them with `fig-` and `tbl-`.
+A labelled figure or table without a caption is numbered too, its caption just "Figure 3".
+Tables and figures are numbered separately, in order. An `@fig-` or `@tbl-` reference with
+no such label shows as a red **?@fig-x**, and `Knit render` warns about it (and about a label
+used twice) on stderr. Other `@`s, as in `me@example.com`, are left alone.
+
 ## Not yet
 
-- Cross-references to tables and figures
 - Math (`$x^2$`): planned through LaTeX, as SVG
 - HTML output, chunk options for figure size
 - Keeping going after an error (knitr's `error=TRUE`)
@@ -139,10 +170,12 @@ show as `?`.
 `Knit render` writes a Clay program beside the report (`report.md.clay`, deleted afterwards
 unless `#{keep: true}`) whose line *n* is the report's line *n*: each chunk's code where it
 is, the text as blank lines, and on the fence lines calls into `Knit`. It runs that with the
-`clay` command, so line numbers in errors are the report's. The program lays out the PDF as
-it goes: the text up to a chunk, the chunk's code, then what `Console capture` collected
-while it ran, and its figure (clay-plot's `drawPdf`, on a
-[clay-pdf](https://github.com/mseminatore/clay-pdf) page).
+`clay` command, so line numbers in errors are the report's. As the program runs it collects
+the report: the text up to a chunk, the chunk's code, then what `Console capture` collected
+while it ran, and its figure. When the last chunk has run it numbers the tables and figures,
+then lays everything out (figures with clay-plot's `drawPdf`, on
+[clay-pdf](https://github.com/mseminatore/clay-pdf) pages), so a reference can come before
+what it refers to. Warnings, and what chunks write to stderr, are passed on to stderr.
 
 | `Knit render(path, opts)` | |
 |---|---|

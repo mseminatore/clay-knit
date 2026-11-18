@@ -122,6 +122,32 @@ Test describe("Markdown text") {
     }
 }
 
+Test describe("cross-references") {
+    Test it("reads labels on chunks, images and table captions") {
+        md = "```{clay #fig-a caption=\"A\"}\n```\n```clay label=fig-b\n```\n![dot](d.png){#fig-c}\n\n| x |\n|---|\n\nTable: Cap. {#tbl-d}\n\n| y |\n|---|\n\nTable: {#tbl-e}"
+        bs = KnitMarkdown blocks(Lines of(md))
+        Test assertEqual(bs map { |b| b get("kind") }, ["chunk", "chunk", "image", "table", "table"])
+        Test assertEqual([bs first get("options") get("label"), bs at(1) get("options") get("label")], ["fig-a", "fig-b"])
+        Test assertEqual([bs at(2) get("path"), bs at(2) get("label")], ["d.png", "fig-c"])
+        Test assertEqual([bs at(3) get("caption"), bs at(3) get("label")], ["Cap.", "tbl-d"])
+        Test assertEqual([bs at(4) get("caption"), bs at(4) get("label")], [nil, "tbl-e"])
+    }
+    Test it("puts the numbers in the text, and marks unknown ones") {
+        KnitMarkdown useRefs(#{"fig-a": "Figure 1", "tbl-b": "Table 2"})
+        Test assertEqual(KnitMarkdown plain("See @fig-a, and @tbl-b."), "See Figure 1, and Table 2.")
+        r = KnitMarkdown runs("**@fig-a** @fig-zz `@fig-a` a@fig-a @other @")
+        Test assertEqual(r map { |p| p at(0) }, ["Figure 1", " ", "?@fig-zz", " ", "@fig-a", " a@fig-a @other @"])
+        Test assertEqual(r first at(1), "Helvetica-Bold")
+        Test assertEqual(r at(2) at(2), "#aa0000")
+        Test assertEqual(KnitMarkdown missing, ["fig-zz"])
+        KnitMarkdown useRefs(nil)
+    }
+    Test it("labels a table from Knit table") {
+        Test assertEqual(Lines of(Knit table([[1]], #{label: "tbl-x", caption: "C"})) first, "Table: C {#tbl-x}")
+        Test assertEqual(Lines of(Knit table([[1]], #{label: "tbl-x"})) first, "Table: {#tbl-x}")
+    }
+}
+
 Test describe("Knit table") {
     Test it("writes Arrays as a Markdown table, numbers on the right") {
         md = Knit table([["a", 1], ["b", 22]], #{header: ["name", "n"]})
@@ -236,6 +262,15 @@ Test describe("render") {
         Test assertTrue(pdf contains("(The dot) Tj"))
         Test assertFalse(pdf contains("(Figure 4: ) Tj"))    // an image without alt text has no caption
         Test assertFalse(pdf contains("(unused) Tj"))
+    }
+    Test it("numbers what is referred to before or after it, generated or not") {
+        md = "@fig-w, @tbl-s and @tbl-g.\n\n```{clay #fig-w}\nPlot plot([1, 2])\n```\n| a |\n|---|\n| 1 |\n\nTable: S {#tbl-s}\n\n```{clay results=asis}\nKnit table([[2]], #{label: \"tbl-g\"}) println\n```\nAfter: @fig-w.\n"
+        File write(dir + "/refs.md", md)
+        pdf = File read(Knit render(dir + "/refs.md"))
+        Test assertTrue(pdf contains("(Figure 1, Table 1 and Table 2.) Tj"))
+        Test assertTrue(pdf contains("(After: Figure 1.) Tj"))
+        Test assertTrue(pdf contains("(Figure 1) Tj"))              // a label without a caption: the number alone
+        Test assertTrue(pdf contains("(Table 2) Tj"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

@@ -27,9 +27,9 @@ ys = xs map { |x| Math sin(x) * Math exp(0 - x / 6) }
 ("peak: " + (ys reduce(0) { |m, y| Math max(m, y) }) toString) println
 ```
 
-The next chunk plots the data from the one above.
+The next chunk plots the data from the one above, as @fig-sine.
 
-```{clay caption="A damped sine, from the data above."}
+```{clay #fig-sine caption="A damped sine, from the data above."}
 Plot figure(#{figsize: [6, 3]})
 Plot plot(xs, ys, #{label: "damped sine"})
 Plot title("A damped sine")
@@ -59,7 +59,7 @@ System exit(1)
 | `output` | true | show what it printed, and its figure |
 | `eval` | true | run it; `norun` is short for `eval=false` |
 
-Table: Chunk options.
+Table: Chunk options. {#tbl-options}
 
 Columns are left, centered or right aligned by the colons in the line under the header:
 
@@ -69,6 +69,7 @@ Columns are left, centered or right aligned by the colons in the line under the 
 | 2 | 4 | 8 |
 | 10 | 100 | 1000 |
 
+@tbl-options lists the chunk options, and @fig-sine is the plot from earlier.
 A chunk with `results=asis` prints Markdown, and `Knit table` makes a table from data:
 
 ```{clay results='asis'}
