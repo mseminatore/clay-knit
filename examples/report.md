@@ -51,8 +51,20 @@ System exit(1)
 
 ---
 
-| a | b |
-|---|---|
-| 1 | 2 |
+### A table
+
+| Chunk option | Default | Effect |
+|:-------------|:-------:|--------|
+| `echo` | true | show the chunk's **code** |
+| `output` | true | show what it printed, and its figure |
+| `eval` | true | run it; `norun` is short for `eval=false` |
+
+Columns are left, centered or right aligned by the colons in the line under the header:
+
+| x | x² | x³ |
+|--:|---:|---:|
+| 1 | 1 | 1 |
+| 2 | 4 | 8 |
+| 10 | 100 | 1000 |
 
 That's all.
