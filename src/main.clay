@@ -1,0 +1,362 @@
+// knit -- reports from Markdown with Clay code chunks, written as PDF
+//
+// Usage:
+//   import("knit")
+//
+//   Knit render("report.md")                  // writes report.pdf
+//   Knit render("report.md", #{output: "out/report.pdf", keep: true})
+//
+// A report is Markdown with ```clay code chunks, as R Markdown has R chunks.
+// The chunks run in order as one program, so a variable from one is there in
+// the next; the PDF shows each chunk's code, what it printed and the figure it
+// drew (with the plot brick, already imported). Chunk options go after
+// "clay": ```{clay echo=false} or ```clay echo=false, eval=false, output=false.
+//
+// How it works: render writes a Clay program beside the report (report.md.clay)
+// whose line n is the report's line n -- the chunks' code where it is, the text
+// as blank lines, and on each fence line a call into Knit -- and runs it with
+// the clay command in the current folder (so it finds the same bricks; Knit
+// dir is the report's folder). So an error in a chunk is reported at its line
+// in report.md. The program lays out the PDF as it goes (KnitDoc):
+// text up to a chunk, the chunk's code, then the output Console capture
+// collected and the figure.
+//
+// Every brick shares one set of top-level names with the program that imports
+// it: this one defines Knit, KnitDoc and KnitMarkdown.
+
+import("plot")
+import("pdf")
+import("markdown.clay")
+
+Knit = Object clone {
+    _doc = nil
+
+    // Run a report's chunks and write it as PDF. opts: output (the PDF's
+    // path; default the report's, ending in .pdf), keep (keep the generated
+    // program), clay (the clay command to run it with). Returns the PDF's path.
+    render(path, opts = nil) {
+        o = opts ?? #{}
+        (File exists(path)) ifFalse { raise("knit: no such file " + path) }
+        md = File read(path)
+        out = o get("output") ?? (Knit _stem(path) + ".pdf")
+        // the program sits beside the report (so bricks/ there is found too)
+        // and runs in this folder, as this program does
+        gen = path + ".clay"
+        File write(gen, Knit program(md, path, out))
+        clay = o get("clay") ?? Knit _clay
+        r = Process run([clay, gen])
+        (o get("keep") == true) ifFalse { File delete(gen) }
+        (r ok) ifFalse {
+            msg = ((r stderr) + (r stdout)) trim
+            name = Knit _base(path)
+            raise("knit: " + path + " failed:\n" + (msg replace(name + ".clay", name)))
+        }
+        out
+    }
+
+    // The program for a report at path: line n is the report's line n
+    program(md, path, out) {
+        lines = (md replace("\r\n", "\n")) split("\n")
+        prog = lines map { |l| "" }
+        blocks = KnitMarkdown blocks(lines)
+        blocks each { |b|
+            (b get("kind") == "chunk") ifTrue {
+                k = b get("index")
+                open = b get("open")
+                prog setAt(open, "Knit _chunk(" + k toString + ")")
+                run = (b get("options") get("eval")) != false
+                run ifTrue {
+                    i = open + 1
+                    (b get("code")) each { |c| prog setAt(i, c); i = i + 1 }
+                }
+                close = b get("close")
+                (close == nil) ifTrue { prog push("Knit _end(" + k toString + ")") } ifFalse {
+                    prog setAt(close, "Knit _end(" + k toString + ")")
+                }
+            }
+        }
+        start = "import(\"knit\"); Knit _start(" + (Knit _quote(path)) + ", " + (Knit _quote(out)) + ")"
+        first = prog at(0)
+        prog setAt(0, (first == "") ifTrue { start } ifFalse { start + "; " + first })
+        prog push("Knit _finish")
+        (prog join("\n")) + "\n"
+    }
+
+    // ---- called by the generated program ----------------------------------------
+
+    // The report's folder, for chunks to find files beside it:
+    //   data = File read(Knit dir + "/data.csv")
+    dir() { (_doc == nil) ifTrue { "." } ifFalse { _doc _dir } }
+
+    _start(path, out) {
+        self _doc = KnitDoc new(path, out)
+        Plot close
+    }
+
+    _chunk(k) {
+        _doc chunk(k)
+        Console beginCapture
+    }
+
+    _end(k) {
+        text = Console endCapture
+        _doc chunkEnd(k, text)
+    }
+
+    _finish() { _doc finish }
+
+    // ---- helpers ----------------------------------------------------------------
+
+    // The clay command: this one, when running in it
+    _clay() {
+        exe = System executable ?? ""
+        base = (Knit _base(exe)) lower
+        ((base == "clay") || (base == "clay.exe")) ifTrue { exe } ifFalse { "clay" }
+    }
+
+    _quote(s) { "\"" + ((s replace("\\", "\\\\")) replace("\"", "\\\"")) + "\"" }
+
+    _slash(path) {
+        a = path lastIndexOf("/")
+        b = path lastIndexOf("\\")
+        (a > b) ifTrue { a } ifFalse { b }
+    }
+
+    _dir(path) {
+        i = Knit _slash(path)
+        (i < 0) ifTrue { "." } ifFalse { (i == 0) ifTrue { "/" } ifFalse { path slice(0, i) } }
+    }
+
+    _base(path) {
+        i = Knit _slash(path)
+        (i < 0) ifTrue { path } ifFalse { path slice(i + 1, path length) }
+    }
+
+    _stem(path) {
+        dot = path lastIndexOf(".")
+        (dot > Knit _slash(path)) ifTrue { path slice(0, dot) } ifFalse { path }
+    }
+
+    _isAbsolute(path) {
+        (path startsWith("/")) || (path startsWith("\\")) || ((path length > 1) && (path byteAt(1) == 58))
+    }
+}
+
+// KnitDoc -- lays out a report as its program runs: text, code, output, figures
+KnitDoc = Object clone {
+    init(path, out) {
+        self _out = out
+        self _dir = Knit _dir(path)
+        lines = ((File read(path)) replace("\r\n", "\n")) split("\n")
+        self _blocks = KnitMarkdown blocks(lines)
+        self _next = 0            // the next block to lay out
+        self _pdf = Pdf new("letter")
+        self _flow = _pdf flow(72)
+        self _size = 11           // body text
+        self _codeSize = 9
+        self _chunkOpts = #{}
+        self
+    }
+
+    // Before chunk k runs: the text up to it, and its code
+    chunk(k) {
+        b = self _upTo(k)
+        self _chunkOpts = b get("options")
+        ((_chunkOpts get("echo")) != false) ifTrue { self _code(b get("code"), "#f3f3f3") }
+    }
+
+    // After chunk k: what it printed, and its figure
+    chunkEnd(k, text) {
+        show = (_chunkOpts get("output")) != false
+        ((text != "") && show) ifTrue { self _output(text) }
+        fig = Plot current
+        ((fig != nil) && (fig axesList size > 0)) ifTrue {
+            show ifTrue { self _figure(fig) }
+        }
+        Plot close
+        _flow space(6)
+    }
+
+    // The rest of the text; page numbers; save
+    finish() {
+        self _layoutTo(_blocks size)
+        n = _pdf pageCount
+        i = 0
+        _pdf pages each { |page|
+            i = i + 1
+            page font("Helvetica", 9) fillColor("#808080") textAlign("center")
+            page text(page width / 2, page height - 36, i toString + " / " + n toString)
+            page textAlign("left")
+        }
+        _pdf save(_out)
+    }
+
+    // ---- laying out blocks ------------------------------------------------------
+
+    // Lay out the blocks before chunk k; returns chunk k's block
+    _upTo(k) {
+        i = _next
+        { (i < _blocks size) && (((_blocks at(i)) get("kind") != "chunk") || ((_blocks at(i)) get("index") != k)) } whileTrue { i = i + 1 }
+        self _layoutTo(i)
+        self _next = i + 1
+        _blocks at(i)
+    }
+
+    _layoutTo(end) {
+        { _next < end } whileTrue {
+            b = _blocks at(_next)
+            self _next = _next + 1
+            self _block(b)
+        }
+    }
+
+    _block(b) {
+        kind = b get("kind")
+        (kind == "front") ifTrue { return self _front(b get("fields")) }
+        (kind == "heading") ifTrue { return self _heading(b get("level"), b get("text")) }
+        (kind == "para") ifTrue { return self _para(KnitMarkdown runs(b get("text")), 0) }
+        (kind == "list") ifTrue { return self _list(b get("items")) }
+        (kind == "quote") ifTrue { return self _para(KnitMarkdown runs(b get("text"), false, "#555555"), 18) }
+        (kind == "code") ifTrue { return self _code(b get("code"), "#f3f3f3") }
+        (kind == "table") ifTrue { return self _code(b get("code"), nil) }
+        (kind == "image") ifTrue { return self _image(b get("path")) }
+        (kind == "rule") ifTrue {
+            page = _flow ensure(12)
+            y = _flow y + 6
+            page strokeColor("#c0c0c0") lineWidth(0.75) line(_flow x, y, _flow x + _flow width, y)
+            _flow space(12)
+        }
+        nil
+    }
+
+    _front(fields) {
+        title = fields get("title")
+        (title != nil) ifTrue {
+            _pdf title(KnitMarkdown plain(title))
+            _flow font("Helvetica-Bold", 20) lineHeight(26) color(nil)
+            _flow richParagraph(KnitMarkdown runs(title, true), "center")
+            _flow space(4)
+        }
+        ["author", "date"] each { |key|
+            v = fields get(key)
+            (v != nil) ifTrue {
+                (key == "author") ifTrue { _pdf author(KnitMarkdown plain(v)) }
+                _flow font("Helvetica", 12) lineHeight(16)
+                _flow richParagraph(KnitMarkdown runs(v), "center")
+            }
+        }
+        _flow space(16)
+    }
+
+    _heading(level, text) {
+        size = [20, 16, 13, 12, 11, 11] at(level - 1)
+        _flow space([14, 12, 10, 8, 8, 8] at(level - 1))
+        // keep a heading with the first lines after it
+        _flow ensure(size * 1.25 + _size * 3)
+        _flow font("Helvetica-Bold", size) lineHeight(size * 1.25) color(nil)
+        _flow richParagraph(KnitMarkdown runs(text, true))
+        _flow space(4)
+    }
+
+    _para(runs, indent) {
+        _flow font("Helvetica", _size) lineHeight(_size * 1.4)
+        _flow richParagraph(runs, "left", indent)
+        _flow space(_size * 0.6)
+    }
+
+    _list(items) {
+        _flow font("Helvetica", _size) lineHeight(_size * 1.4)
+        lh = _size * 1.4
+        ascent = Pdf ascent("Helvetica", _size)
+        items each { |it|
+            depth = it at(3)
+            x = _flow x + (depth * 18)
+            page = _flow ensure(lh)
+            marker = (it at(0)) ifTrue { it at(1) } ifFalse { "\xe2\x80\xa2" }
+            page font("Helvetica", _size) fillColor("#000000")
+            page text(x + 4, _flow y + ascent, marker)
+            _flow richParagraph(KnitMarkdown runs(it at(2)), "left", (depth * 18) + 18)
+            _flow space(_size * 0.2)
+        }
+        _flow space(_size * 0.4)
+    }
+
+    // Lines of code (or output) in Courier on a band of background (nil: none)
+    _code(lines, background) {
+        size = _codeSize
+        lh = size * 1.35
+        pad = 6
+        w = _flow width
+        ascent = Pdf ascent("Courier", size)
+        rows = []
+        lines each { |l|
+            line = (l replace("\t", "    ")) replace("\r", "")
+            ((line length == 0) || ((Pdf textWidth(line, "Courier", size)) <= (w - 2 * pad))) ifTrue { rows push(line) } ifFalse {
+                rest = line
+                { (rest length > 0) && ((Pdf textWidth(rest, "Courier", size)) > (w - 2 * pad)) } whileTrue {
+                    cut = Pdf _fit(rest, w - 2 * pad, "Courier", size)
+                    rows push(rest slice(0, cut))
+                    rest = rest slice(cut, rest length)
+                }
+                rows push(rest)
+            }
+        }
+        // drop blank lines at the ends
+        { (rows size > 0) && (((rows at(rows size - 1)) trim) == "") } whileTrue { rows = rows slice(0, rows size - 1) }
+        (rows size == 0) ifTrue { return nil }
+        _flow ensure(lh + pad)
+        _flow space(2)
+        i = 0
+        rows each { |row|
+            first = i == 0
+            last = i == (rows size - 1)
+            top = first ifTrue { pad } ifFalse { 0 }
+            bottom = last ifTrue { pad } ifFalse { 0 }
+            page = _flow ensure(top + lh + bottom)
+            (background != nil) ifTrue {
+                page fillColor(background) fillRect(_flow x, _flow y, w, top + lh + bottom)
+            }
+            page font("Courier", size) fillColor("#1a1a1a")
+            page text(_flow x + pad, _flow y + top + ascent + (lh - size) / 2, row)
+            _flow space(top + lh + bottom)
+            i = i + 1
+        }
+        _flow space(8)
+    }
+
+    // A chunk's printed output: like code, with a rule down its left side
+    _output(text) {
+        lines = text split("\n")
+        ((lines size > 0) && ((lines at(lines size - 1)) == "")) ifTrue { lines = lines slice(0, lines size - 1) }
+        startPage = _flow page
+        startY = _flow y + 2
+        self _code(lines, nil)
+        (_flow page == startPage) ifTrue {
+            startPage strokeColor("#b0b0b0") lineWidth(1.5) line(_flow x + 1, startY, _flow x + 1, _flow y - 8)
+        }
+    }
+
+    // A figure at its own size, or narrowed to the text width
+    _figure(fig) {
+        w = Math min(_flow width, fig widthIn * 72)
+        h = w * (fig heightIn / (fig widthIn * 1.0))
+        page = _flow ensure(h)
+        x = _flow x + (_flow width - w) / 2
+        fig drawPdf(page, x, _flow y, w)
+        _flow advance(h + 10)
+    }
+
+    // An image file (PNG or JPEG) at a point a pixel, narrowed to the text width
+    _image(path) {
+        img = nil
+        full = ((Knit _isAbsolute(path)) || (_dir == ".")) ifTrue { path } ifFalse { _dir + "/" + path }
+        try { img = _pdf loadImage(full) } catch { |e|
+            return self _para([["[image " + path + ": " + e message + "]", "Helvetica-Oblique", "#aa0000"]], 0)
+        }
+        w = Math min(_flow width, img width * 0.75)
+        h = w * (img height / (img width * 1.0))
+        page = _flow ensure(h)
+        page image(img, _flow x + (_flow width - w) / 2, _flow y, w, h)
+        _flow advance(h + 10)
+    }
+}

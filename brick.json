@@ -1,0 +1,11 @@
+{
+  "name": "knit",
+  "version": "0.1.0",
+  "clay": ">=0.3.7",
+  "description": "Reports from Markdown with Clay code chunks: runs the chunks and writes a PDF with their code, output and figures, like R Markdown's knitr",
+  "main": "src/main.clay",
+  "deps": {
+    "plot": "github.com/mseminatore/clay-plot",
+    "pdf": "github.com/mseminatore/clay-pdf"
+  }
+}

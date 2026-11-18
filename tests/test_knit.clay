@@ -1,0 +1,152 @@
+// Tests for the knit brick. Run them from the brick's directory:
+//   clay tests/test_knit.clay
+// (a brick can be imported by its own name from inside its own directory)
+// They use stdlib/test, which comes with Clay: `Test run` prints a summary
+// and exits with status 1 if any test failed.
+import("knit")
+import("stdlib/test")
+
+Lines = Object clone {
+    of(text) { text split("\n") }
+}
+
+Test describe("Markdown blocks") {
+    Test it("reads front matter, headings and paragraphs") {
+        bs = KnitMarkdown blocks(Lines of("---\ntitle: \"My report\"\nauthor: Me\n---\n# One #\ntext on\ntwo lines\n\n## Two"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["front", "heading", "para", "heading"])
+        Test assertEqual(bs first get("fields") get("title"), "My report")
+        Test assertEqual(bs first get("fields") get("author"), "Me")
+        Test assertEqual(bs at(1) get("text"), "One")
+        Test assertEqual(bs at(2) get("text"), "text on two lines")
+        Test assertEqual(bs at(2) get("line"), 5)
+        Test assertEqual(bs at(3) get("level"), 2)
+    }
+    Test it("reads lists, nested and ordered, with continued items") {
+        bs = KnitMarkdown blocks(Lines of("- a\n  more a\n  - b\n\n- c\n1. one\n2) two\n\nafter"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["list", "para"])
+        items = bs first get("items")
+        Test assertEqual(items map { |it| it at(2) }, ["a more a", "b", "c", "one", "two"])
+        Test assertEqual(items map { |it| it at(3) }, [0, 1, 0, 0, 0])
+        Test assertEqual(items map { |it| it at(1) }, ["", "", "", "1.", "2)"])
+    }
+    Test it("tells Clay chunks from other code, with options") {
+        md = "```clay\na = 1\n```\n```{clay echo=false, output=false}\nb\n```\n```clay norun\nc\n```\n```python\nprint(1)\n```"
+        bs = KnitMarkdown blocks(Lines of(md))
+        Test assertEqual(bs map { |b| b get("kind") }, ["chunk", "chunk", "chunk", "code"])
+        Test assertEqual(bs map { |b| b get("index") }, [0, 1, 2, nil])
+        Test assertEqual(bs first get("code"), ["a = 1"])
+        Test assertEqual([bs first get("open"), bs first get("close")], [0, 2])
+        Test assertEqual(bs at(1) get("options") get("echo"), false)
+        Test assertEqual(bs at(1) get("options") get("output"), false)
+        Test assertEqual(bs at(2) get("options") get("eval"), false)
+        Test assertEqual(bs at(3) get("lang"), "python")
+    }
+    Test it("runs an unclosed fence to the end") {
+        bs = KnitMarkdown blocks(Lines of("```clay\nx = 1\ny = 2"))
+        Test assertEqual(bs first get("close"), nil)
+        Test assertEqual(bs first get("code"), ["x = 1", "y = 2"])
+    }
+    Test it("reads quotes, rules, tables and images") {
+        bs = KnitMarkdown blocks(Lines of("> a\n> b\n\n---\n| x | y |\n|---|---|\n\n![a plot](fig.png)"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["quote", "rule", "table", "image"])
+        Test assertEqual(bs first get("text"), "a b")
+        Test assertEqual(bs at(2) get("code") size, 2)
+        Test assertEqual([bs at(3) get("alt"), bs at(3) get("path")], ["a plot", "fig.png"])
+    }
+}
+
+Test describe("Markdown text") {
+    Test it("styles bold, italic, code and links") {
+        r = KnitMarkdown runs("a **b** *c* ***d*** `e()` [f](http://x)")
+        Test assertEqual(r map { |p| p at(0) }, ["a ", "b", " ", "c", " ", "d", " ", "e()", " ", "f"])
+        Test assertEqual(r map { |p| p at(1) }, ["Helvetica", "Helvetica-Bold", "Helvetica", "Helvetica-Oblique", "Helvetica",
+            "Helvetica-BoldOblique", "Helvetica", "Courier", "Helvetica", "Helvetica"])
+        Test assertEqual(r last at(2), "#1a5fb4")
+    }
+    Test it("leaves markers that do not close, snake_case and escapes alone") {
+        Test assertEqual(KnitMarkdown plain("2 * 3 = 6, a_b_c, \\*x\\*, **open"), "2 * 3 = 6, a_b_c, *x*, **open")
+        Test assertEqual(KnitMarkdown plain("_it_ and __bold__"), "it and bold")
+    }
+    Test it("keeps a heading bold around its own bold") {
+        r = KnitMarkdown runs("A **b** c", true)
+        Test assertEqual(r map { |p| p at(1) }, ["Helvetica-Bold", "Helvetica-Bold", "Helvetica-Bold"])
+        Test assertEqual(KnitMarkdown plain("A **b** c"), "A b c")
+    }
+}
+
+Test describe("program") {
+    Test it("keeps each line of the report on its line") {
+        md = "# Title\n\ntext\n```clay\nx = 1\nx println\n```\nmore\n```clay eval=false\nnot run\n```"
+        p = Lines of(Knit program(md, "r.md", "r.pdf"))
+        Test assertTrue(p first startsWith("import(\"knit\"); Knit _start(\"r.md\", \"r.pdf\")"))
+        Test assertEqual(p at(3), "Knit _chunk(0)")
+        Test assertEqual(p at(4), "x = 1")
+        Test assertEqual(p at(5), "x println")
+        Test assertEqual(p at(6), "Knit _end(0)")
+        Test assertEqual(p at(7), "")
+        Test assertEqual(p at(9), "")                 // eval=false: not run
+        Test assertEqual(p at(10), "Knit _end(1)")
+        Test assertEqual(p at(11), "Knit _finish")
+    }
+    Test it("closes an unclosed chunk and quotes paths") {
+        p = Lines of(Knit program("```clay\n1", "a \"b\".md", "o.pdf"))
+        Test assertTrue(p first contains("Knit _start(\"a \\\"b\\\".md\""))
+        Test assertTrue(p first endsWith("; Knit _chunk(0)"))
+        Test assertEqual(p at(2), "Knit _end(0)")
+    }
+    Test it("splits paths") {
+        Test assertEqual([Knit _dir("a/b/c.md"), Knit _base("a/b/c.md"), Knit _stem("a/b/c.md")], ["a/b", "c.md", "a/b/c"])
+        Test assertEqual([Knit _dir("c.md"), Knit _stem("a.b/c")], [".", "a.b/c"])
+    }
+}
+
+Test describe("render") {
+    dir = File tempDir + "/clay_knit_test"
+    (File isDir(dir)) ifFalse { File mkdir(dir) }
+
+    Test it("runs the chunks in order and writes their output, figures and text") {
+        md = "---\ntitle: Test\n---\n# Results\n\nSome *text*.\n\n```clay\ntotal = 0\n[1, 2, 3] each { |v| total = total + v }\n(\"total \" + total toString) println\n```\n\n```clay\n(\"twice \" + (total * 2) toString) println\nPlot plot([1, 4, 9])\n```\n"
+        File write(dir + "/r.md", md)
+        out = Knit render(dir + "/r.md")
+        Test assertEqual(out, dir + "/r.pdf")
+        pdf = File read(out)
+        Test assertTrue(pdf startsWith("%PDF-"))
+        Test assertTrue(pdf contains("(total 6) Tj"))
+        Test assertTrue(pdf contains("(twice 12) Tj"))       // the second chunk sees the first's total
+        Test assertTrue(pdf contains("(Results) Tj"))
+        Test assertTrue(pdf contains("/Title (Test)"))
+        Test assertTrue(pdf contains(" cm"))                 // the figure's transform
+        Test assertFalse(File exists(dir + "/r.md.clay"))    // the program is removed
+        File delete(out)
+    }
+    Test it("reports an error at its line in the report") {
+        File write(dir + "/bad.md", "# Bad\n\n```clay\nx = 1\nraise(\"chunk failed\")\n```\n")
+        e = Test assertRaises({ Knit render(dir + "/bad.md") })
+        Test assertTrue(e message contains("bad.md:5"))
+        Test assertTrue(e message contains("chunk failed"))
+    }
+    Test it("hides code or output, writes where asked, and keeps the program") {
+        File write(dir + "/opts.md", "```{clay echo=false}\n\"shown\" println\nsecret = 1\n```\n```clay output=false\n\"hidden\" println\n```\n")
+        out = Knit render(dir + "/opts.md", #{output: dir + "/other.pdf", keep: true})
+        Test assertEqual(out, dir + "/other.pdf")
+        pdf = File read(out)
+        Test assertTrue(pdf contains("(shown) Tj"))
+        Test assertFalse(pdf contains("(secret = 1) Tj"))
+        Test assertFalse(pdf contains("(hidden) Tj"))
+        Test assertTrue(pdf contains("(\\\"hidden\\\" println) Tj") || pdf contains("(\"hidden\" println) Tj"))
+        Test assertTrue(File exists(dir + "/opts.md.clay"))
+        File delete(out)
+        File delete(dir + "/opts.md.clay")
+    }
+    Test it("gives chunks the report's folder") {
+        File write(dir + "/data.txt", "42")
+        File write(dir + "/dir.md", "```clay\n(File read(Knit dir + \"/data.txt\")) println\n```\n")
+        pdf = File read(Knit render(dir + "/dir.md"))
+        Test assertTrue(pdf contains("(42) Tj"))
+    }
+    Test it("raises for a missing report") {
+        Test assertRaises({ Knit render(dir + "/none.md") })
+    }
+}
+
+Test run

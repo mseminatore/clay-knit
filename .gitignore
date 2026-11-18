@@ -1,0 +1,5 @@
+# bricks installed by `clay bricks install`
+bricks/
+# knitted reports and the programs knit writes
+*.pdf
+*.md.clay

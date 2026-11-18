@@ -1,0 +1,5 @@
+// Knits a report: clay examples/knit.clay [report.md]   (from the brick's folder)
+import("knit")
+args = System args
+path = (args size > 0) ifTrue { args at(0) } ifFalse { "examples/report.md" }
+("wrote " + (Knit render(path))) println

@@ -1,0 +1,363 @@
+// KnitMarkdown -- the Markdown knit reads: blocks, and the styled runs of text in them
+//
+// blocks(lines) turns the document's lines into an Array of blocks, each a
+// Dict with "kind" and "line" (its first line, 0-based):
+//   front    YAML-style front matter between --- lines: "fields" (title, author, date ...)
+//   heading  "level", "text"
+//   para     "text" (its lines joined with spaces)
+//   list     "items": [ordered, marker, text, depth] each
+//   quote    "text"
+//   code     a fenced block that is not Clay: "lang", "code" (Array of lines)
+//   chunk    a ```clay block: "index" (0, 1, ...), "code", "options" (Dict),
+//            "open" and "close" (the fence lines; close is nil if unclosed)
+//   table    lines starting with "|", kept as they are: "code"
+//   image    a paragraph that is only ![alt](path): "alt", "path"
+//   rule     ---, *** or ___
+//
+// runs(text, bold) turns inline Markdown into runs for clay-pdf's wrapRuns:
+// **bold**, *italic* (or _italic_), `code`, [links](url) and \-escapes.
+
+KnitMarkdown = Object clone {
+    blocks(lines) {
+        out = []
+        n = lines size
+        i = 0
+        chunks = 0
+        // front matter
+        ((n > 0) && ((lines at(0)) trim == "---")) ifTrue {
+            j = 1
+            { (j < n) && ((lines at(j)) trim != "---") } whileTrue { j = j + 1 }
+            (j < n) ifTrue {
+                fields = #{}
+                (1..(j - 1)) each { |k|
+                    l = lines at(k)
+                    c = l indexOf(":")
+                    (c > 0) ifTrue { fields set((l slice(0, c)) trim, KnitMarkdown _unquote((l slice(c + 1, l length)) trim)) }
+                }
+                out push(#{kind: "front", line: 0, fields: fields})
+                i = j + 1
+            }
+        }
+        { i < n } whileTrue {
+            line = lines at(i)
+            t = line trim
+            start = i
+            (t == "") ifTrue {
+                i = i + 1
+            } ifFalse {
+                fence = KnitMarkdown _fence(t)
+                (fence != nil) ifTrue {
+                    // a fenced block runs to a line of at least as many backticks
+                    code = []
+                    j = i + 1
+                    close = nil
+                    { (j < n) && (close == nil) } whileTrue {
+                        lt = (lines at(j)) trim
+                        ((lt startsWith(fence at(0))) && ((lt replace("`", "")) == "")) ifTrue { close = j } ifFalse {
+                            code push(lines at(j))
+                            j = j + 1
+                        }
+                    }
+                    info = KnitMarkdown _info(fence at(1))
+                    (info at(0) == "clay") ifTrue {
+                        out push(#{kind: "chunk", line: i, index: chunks, code: code, options: info at(1), open: i, close: close})
+                        chunks = chunks + 1
+                    } ifFalse {
+                        out push(#{kind: "code", line: i, lang: info at(0), code: code})
+                    }
+                    i = (close == nil) ifTrue { n } ifFalse { close + 1 }
+                } ifFalse {
+                    level = KnitMarkdown _headingLevel(t)
+                    (level > 0) ifTrue {
+                        text = (t slice(level, t length)) trim
+                        // closing #s are optional
+                        { text endsWith("#") } whileTrue { text = (text slice(0, text length - 1)) trim }
+                        out push(#{kind: "heading", line: i, level: level, text: text})
+                        i = i + 1
+                    } ifFalse {
+                        (KnitMarkdown _isRule(t)) ifTrue {
+                            out push(#{kind: "rule", line: i})
+                            i = i + 1
+                        } ifFalse {
+                            (t startsWith(">")) ifTrue {
+                                parts = []
+                                { (i < n) && (((lines at(i)) trim) startsWith(">")) } whileTrue {
+                                    parts push(((((lines at(i)) trim) slice(1, ((lines at(i)) trim) length))) trim)
+                                    i = i + 1
+                                }
+                                out push(#{kind: "quote", line: start, text: parts join(" ")})
+                            } ifFalse {
+                                (t startsWith("|")) ifTrue {
+                                    rows = []
+                                    { (i < n) && (((lines at(i)) trim) startsWith("|")) } whileTrue {
+                                        rows push((lines at(i)) trim)
+                                        i = i + 1
+                                    }
+                                    out push(#{kind: "table", line: start, code: rows})
+                                } ifFalse {
+                                    (KnitMarkdown _item(line) != nil) ifTrue {
+                                        items = []
+                                        going = true
+                                        { (i < n) && going } whileTrue {
+                                            l = lines at(i)
+                                            it = KnitMarkdown _item(l)
+                                            (it != nil) ifTrue {
+                                                items push(it)
+                                                i = i + 1
+                                            } ifFalse {
+                                                ((l trim) == "") ifTrue {
+                                                    // a blank line ends the list unless another item follows
+                                                    ((i + 1 < n) && (KnitMarkdown _item(lines at(i + 1)) != nil)) ifTrue { i = i + 1 } ifFalse { going = false }
+                                                } ifFalse {
+                                                    // an indented line continues the item
+                                                    ((l startsWith(" ")) || (l startsWith("\t"))) ifTrue {
+                                                        last = items at(items size - 1)
+                                                        last setAt(2, (last at(2)) + " " + (l trim))
+                                                        i = i + 1
+                                                    } ifFalse { going = false }
+                                                }
+                                            }
+                                        }
+                                        out push(#{kind: "list", line: start, items: items})
+                                    } ifFalse {
+                                        parts = []
+                                        { (i < n) && (KnitMarkdown _continues(lines at(i))) } whileTrue {
+                                            parts push((lines at(i)) trim)
+                                            i = i + 1
+                                        }
+                                        (parts size == 0) ifTrue { parts push(t); i = i + 1 }
+                                        text = parts join(" ")
+                                        img = KnitMarkdown _image(text)
+                                        (img != nil) ifTrue {
+                                            out push(#{kind: "image", line: start, alt: img at(0), path: img at(1)})
+                                        } ifFalse {
+                                            out push(#{kind: "para", line: start, text: text})
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    // ---- inline text ----------------------------------------------------------
+
+    // Runs [text, font, color] for inline Markdown; bold: start in bold (headings)
+    runs(text, bold = false, color = nil) {
+        out = []
+        b = text bytes
+        n = b size
+        buf = []
+        strong = false     // ** toggles this; bold (a heading's) stays on under it
+        em = false
+        i = 0
+        flush = {
+            (buf size > 0) ifTrue {
+                out push([String fromBytes(buf), KnitMarkdown _font(bold || strong, em), color])
+                buf = []
+            }
+        }
+        { i < n } whileTrue {
+            c = b at(i)
+            handled = false
+            // \x: x as it is
+            ((c == 92) && (i + 1 < n) && (KnitMarkdown _punct(b at(i + 1)))) ifTrue {
+                buf push(b at(i + 1))
+                i = i + 2
+                handled = true
+            }
+            // `code`
+            ((handled == false) && (c == 96)) ifTrue {
+                close = KnitMarkdown _find(b, 96, i + 1)
+                (close > 0) ifTrue {
+                    flush value
+                    out push([text slice(i + 1, close), "Courier", color])
+                    i = close + 1
+                    handled = true
+                }
+            }
+            // [text](url)
+            ((handled == false) && (c == 91)) ifTrue {
+                mid = KnitMarkdown _find(b, 93, i + 1)
+                ((mid > 0) && (mid + 1 < n) && (b at(mid + 1) == 40)) ifTrue {
+                    end = KnitMarkdown _find(b, 41, mid + 2)
+                    (end > 0) ifTrue {
+                        flush value
+                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4"])
+                        i = end + 1
+                        handled = true
+                    }
+                }
+            }
+            // ** or __: bold, if it closes later
+            ((handled == false) && ((c == 42) || (c == 95)) && (i + 1 < n) && (b at(i + 1) == c)) ifTrue {
+                // __ only around words: not inside snake__case
+                word = (c == 95) ifTrue { strong ifTrue { KnitMarkdown _wordChar(b, i + 2) } ifFalse { KnitMarkdown _wordChar(b, i - 1) } } ifFalse { false }
+                pair = (c == 42) ifTrue { "**" } ifFalse { "__" }
+                // an opener is followed by text, a closer comes after text
+                flank = strong ifTrue { KnitMarkdown _space(b, i - 1) == false } ifFalse {
+                    (KnitMarkdown _space(b, i + 2) == false) && ((text slice(i + 2, n)) contains(pair))
+                }
+                ((word == false) && flank) ifTrue {
+                    flush value
+                    strong = strong == false
+                    i = i + 2
+                    handled = true
+                }
+            }
+            // * or _: italic, if it closes later (_ only around words)
+            ((handled == false) && ((c == 42) || (c == 95))) ifTrue {
+                ok = true
+                (c == 95) ifTrue {
+                    ok = em ifTrue { KnitMarkdown _wordChar(b, i + 1) == false } ifFalse { KnitMarkdown _wordChar(b, i - 1) == false }
+                }
+                ok ifTrue {
+                    ok = em ifTrue { KnitMarkdown _space(b, i - 1) == false } ifFalse {
+                        (KnitMarkdown _space(b, i + 1) == false) && (KnitMarkdown _closer(b, c, i + 1) > i + 1)
+                    }
+                }
+                ok ifTrue {
+                    flush value
+                    em = em == false
+                    i = i + 1
+                    handled = true
+                }
+            }
+            handled ifFalse {
+                buf push(c)
+                i = i + 1
+            }
+        }
+        flush value
+        out
+    }
+
+    // The text alone, without its markup (for the PDF's title)
+    plain(text) { ((KnitMarkdown runs(text)) map { |r| r at(0) }) join("") }
+
+    // ---- helpers --------------------------------------------------------------
+
+    _font(strong, em) {
+        strong ifTrue { em ifTrue { "Helvetica-BoldOblique" } ifFalse { "Helvetica-Bold" } } ifFalse {
+            em ifTrue { "Helvetica-Oblique" } ifFalse { "Helvetica" }
+        }
+    }
+
+    // The index of byte c at or after from, or -1
+    _find(b, c, from) {
+        i = from
+        n = b size
+        { (i < n) && (b at(i) != c) } whileTrue { i = i + 1 }
+        (i < n) ifTrue { i } ifFalse { -1 }
+    }
+
+    // Is byte i whitespace, or outside the text?
+    _space(b, i) {
+        ((i < 0) || (i >= b size)) ifTrue { return true }
+        c = b at(i)
+        (c == 32) || (c == 9) || (c == 10)
+    }
+
+    // The next c that can close emphasis (after text), or -1
+    _closer(b, c, from) {
+        i = KnitMarkdown _find(b, c, from)
+        { (i > 0) && (KnitMarkdown _space(b, i - 1)) } whileTrue { i = KnitMarkdown _find(b, c, i + 1) }
+        i
+    }
+
+    _wordChar(b, i) {
+        ((i < 0) || (i >= b size)) ifTrue { return false }
+        c = b at(i)
+        ((c >= 48) && (c <= 57)) || ((c >= 65) && (c <= 90)) || ((c >= 97) && (c <= 122)) || (c >= 128)
+    }
+
+    _punct(c) { "\\`*_{}[]()#+-.!|$<>~\"'" bytes contains(c) }
+
+    // [backticks, info] for an opening fence, else nil
+    _fence(t) {
+        (t startsWith("```")) ifFalse { return nil }
+        k = 0
+        { (k < t length) && (t byteAt(k) == 96) } whileTrue { k = k + 1 }
+        [t slice(0, k), (t slice(k, t length)) trim]
+    }
+
+    // A fence's info string as [language, options]: "clay", "{clay echo=false}",
+    // "clay echo=false, eval=false"; "norun" (Clay's docs) means eval=false
+    _info(info) {
+        s = info
+        ((s startsWith("{")) && (s endsWith("}"))) ifTrue { s = s slice(1, s length - 1) }
+        words = ((s replace(",", " ")) split(" ")) filter { |w| w != "" }
+        opts = #{}
+        (words size == 0) ifTrue { return ["", opts] }
+        lang = (words at(0)) lower
+        (words slice(1, words size)) each { |w|
+            eq = w indexOf("=")
+            (eq > 0) ifTrue {
+                v = (w slice(eq + 1, w length)) lower
+                opts set(w slice(0, eq), (v == "true") ifTrue { true } ifFalse { (v == "false") ifTrue { false } ifFalse { v } })
+            } ifFalse {
+                (w == "norun") ifTrue { opts set("eval", false) } ifFalse { opts set(w, true) }
+            }
+        }
+        [lang, opts]
+    }
+
+    _headingLevel(t) {
+        k = 0
+        { (k < t length) && (t byteAt(k) == 35) } whileTrue { k = k + 1 }
+        ((k >= 1) && (k <= 6) && ((k == t length) || (t byteAt(k) == 32))) ifTrue { k } ifFalse { 0 }
+    }
+
+    _isRule(t) {
+        s = t replace(" ", "")
+        (s length < 3) ifTrue { return false }
+        ((s replace("-", "")) == "") || ((s replace("*", "")) == "") || ((s replace("_", "")) == "")
+    }
+
+    // A list item line as [ordered, marker, text, depth], else nil
+    _item(line) {
+        indent = 0
+        { (indent < line length) && (line byteAt(indent) == 32) } whileTrue { indent = indent + 1 }
+        t = line slice(indent, line length)
+        (t length < 2) ifTrue { return nil }
+        c = t byteAt(0)
+        depth = indent / 2
+        (((c == 45) || (c == 42) || (c == 43)) && (t byteAt(1) == 32)) ifTrue {
+            return [false, "", (t slice(2, t length)) trim, depth]
+        }
+        k = 0
+        { (k < t length) && (t byteAt(k) >= 48) && (t byteAt(k) <= 57) } whileTrue { k = k + 1 }
+        ((k > 0) && (k + 1 < t length) && ((t byteAt(k) == 46) || (t byteAt(k) == 41)) && (t byteAt(k + 1) == 32)) ifTrue {
+            return [true, t slice(0, k + 1), (t slice(k + 2, t length)) trim, depth]
+        }
+        nil
+    }
+
+    // Does a line carry on a paragraph (not blank, not another block)?
+    _continues(line) {
+        t = line trim
+        (t == "") ifTrue { return false }
+        ((KnitMarkdown _fence(t) != nil) || (KnitMarkdown _headingLevel(t) > 0) || (t startsWith(">")) ||
+            (t startsWith("|")) || (KnitMarkdown _isRule(t)) || (KnitMarkdown _item(line) != nil)) ifTrue { return false }
+        true
+    }
+
+    // ![alt](path) alone: [alt, path], else nil
+    _image(t) {
+        ((t startsWith("![")) && (t endsWith(")"))) ifFalse { return nil }
+        mid = t indexOf("](")
+        (mid < 0) ifTrue { return nil }
+        [t slice(2, mid), t slice(mid + 2, t length - 1)]
+    }
+
+    _unquote(v) {
+        ((v length >= 2) && (((v startsWith("\"")) && (v endsWith("\""))) || ((v startsWith("'")) && (v endsWith("'"))))) ifTrue {
+            return v slice(1, v length - 1)
+        }
+        v
+    }
+}
