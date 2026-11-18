@@ -93,6 +93,47 @@ Knit = Object clone {
         Plot close
     }
 
+    // Markdown for a table, to print in a results=asis chunk. rows: Arrays,
+    // or Dicts (the first one's keys are the columns). opts: header (the
+    // column names), align ("l", "c", "r" or "left", "center", "right" a
+    // column; columns of numbers go right, others left), digits (decimal
+    // places, for columns with numbers that are not whole), caption
+    table(rows, opts = nil) {
+        o = opts ?? #{}
+        dicts = (rows size > 0) && ((rows first type) == "Dict")
+        keys = dicts ifTrue { rows first keys } ifFalse { nil }
+        header = o get("header") ?? keys
+        cells = rows map { |r| dicts ifTrue { keys map { |k| r get(k) } } ifFalse { r } }
+        ncol = (header != nil) ifTrue { header size } ifFalse { 0 }
+        cells each { |r| ncol = Math max(ncol, r size) }
+        cols = (0..(ncol - 1)) map { |j| cells map { |r| (j < r size) ifTrue { r at(j) } ifFalse { nil } } }
+        digits = o get("digits")
+        align = o get("align") ?? []
+        text = []
+        aligns = []
+        ncol times { |j|
+            col = cols at(j)
+            nums = col filter { |v| v != nil }
+            numeric = (nums size > 0) && ((nums filter { |v| (v type) != "Number" }) size == 0)
+            whole = numeric && ((nums filter { |v| v != Math round(v) }) size == 0)
+            text push(col map { |v|
+                (v == nil) ifTrue { "" } ifFalse {
+                    ((digits != nil) && numeric && (whole == false)) ifTrue { Knit _fixed(v, digits) } ifFalse { Knit _cell(v) }
+                }
+            })
+            a = (j < align size) ifTrue { (align at(j)) toString lower } ifFalse { numeric ifTrue { "r" } ifFalse { "l" } }
+            aligns push((a startsWith("r")) ifTrue { "--:" } ifFalse { (a startsWith("c")) ifTrue { ":-:" } ifFalse { ":--" } })
+        }
+        head = (0..(ncol - 1)) map { |j| ((header != nil) && (j < header size)) ifTrue { Knit _cell(header at(j)) } ifFalse { "" } }
+        lines = []
+        cap = o get("caption")
+        (cap != nil) ifTrue { lines push("Table: " + Knit _cell(cap)); lines push("") }
+        lines push("| " + head join(" | ") + " |")
+        lines push("|" + aligns join("|") + "|")
+        cells size times { |i| lines push("| " + ((text map { |c| c at(i) }) join(" | ")) + " |") }
+        lines join("\n") + "\n"
+    }
+
     _chunk(k) {
         _doc chunk(k)
         Console beginCapture
@@ -115,6 +156,22 @@ Knit = Object clone {
     }
 
     _quote(s) { "\"" + ((s replace("\\", "\\\\")) replace("\"", "\\\"")) + "\"" }
+
+    // A value as a table cell: one line, its |s escaped
+    _cell(v) {
+        ((v toString) replace("\n", " ") replace("\r", "")) replace("|", "\\|")
+    }
+
+    // x with digits decimal places
+    _fixed(x, digits) {
+        (digits <= 0) ifTrue { return (Math round(x)) toString }
+        n = Math round(x * Math round(Math pow(10, digits)))
+        neg = n < 0
+        s = (neg ifTrue { 0 - n } ifFalse { n }) toString
+        { s length <= digits } whileTrue { s = "0" + s }
+        s = (s slice(0, s length - digits)) + "." + (s slice(s length - digits, s length))
+        neg ifTrue { "-" + s } ifFalse { s }
+    }
 
     _slash(path) {
         a = path lastIndexOf("/")
@@ -155,6 +212,7 @@ KnitDoc = Object clone {
         self _size = 11           // body text
         self _codeSize = 9
         self _chunkOpts = #{}
+        self _tables = 0          // captioned tables so far
         self
     }
 
@@ -168,7 +226,10 @@ KnitDoc = Object clone {
     // After chunk k: what it printed, and its figure
     chunkEnd(k, text) {
         show = (_chunkOpts get("output")) != false
-        ((text != "") && show) ifTrue { self _output(text) }
+        results = _chunkOpts get("results")
+        ((text != "") && show && (results != "hide")) ifTrue {
+            (results == "asis") ifTrue { self _markdown(text) } ifFalse { self _output(text) }
+        }
         fig = Plot current
         ((fig != nil) && (fig axesList size > 0)) ifTrue {
             show ifTrue { self _figure(fig) }
@@ -217,7 +278,7 @@ KnitDoc = Object clone {
         (kind == "para") ifTrue { return self _para(KnitMarkdown runs(b get("text")), 0) }
         (kind == "list") ifTrue { return self _list(b get("items")) }
         (kind == "quote") ifTrue { return self _para(KnitMarkdown runs(b get("text"), false, "#555555"), 18) }
-        (kind == "code") ifTrue { return self _code(b get("code"), "#f3f3f3") }
+        ((kind == "code") || (kind == "chunk")) ifTrue { return self _code(b get("code"), "#f3f3f3") }
         (kind == "table") ifTrue { return self _table(b) }
         (kind == "image") ifTrue { return self _image(b get("path")) }
         (kind == "rule") ifTrue {
@@ -364,10 +425,27 @@ KnitDoc = Object clone {
         x0 = _flow x + (avail - total) / 2
         x1 = x0 + total
         cut = (0..(ncol - 1)) map { |j| (widths at(j)) < (mins at(j)) }
+        // a header of empty cells is left out
         head = self _tableCells(header, widths, pad, size, lh)
+        ((((b get("header")) filter { |c| c != "" }) size) == 0) ifTrue { head = nil }
+        // "Table n: caption" above it, wrapped to the text width
+        caption = []
+        cap = b get("caption")
+        (cap != nil) ifTrue {
+            self _tables = _tables + 1
+            caption = Pdf wrapRuns([["Table " + _tables toString + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(cap), avail, size)
+        }
+        capH = (caption size > 0) ifTrue { caption size * lh + 4 } ifFalse { 0 }
         _flow space(4)
-        // keep the header with the first row
-        page = _flow ensure((head at(1)) + ((rows size > 0) ifTrue { (self _tableCells(rows first, widths, pad, size, lh)) at(1) } ifFalse { 0 }))
+        // keep the caption and header with the first row
+        page = _flow ensure(capH + ((head != nil) ifTrue { head at(1) } ifFalse { 0 }) +
+            ((rows size > 0) ifTrue { (self _tableCells(rows first, widths, pad, size, lh)) at(1) } ifFalse { 0 }))
+        ascent = Pdf ascent("Helvetica", size)
+        caption each { |l|
+            page runs(_flow x + (avail - (l at(1))) / 2, _flow y + ascent, l at(0), size)
+            _flow space(lh)
+        }
+        (capH > 0) ifTrue { _flow space(4) }
         self _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh)
         rows each { |r|
             cells = self _tableCells(r, widths, pad, size, lh)
@@ -399,6 +477,7 @@ KnitDoc = Object clone {
     _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh) {
         page = _flow page
         page strokeColor("#000000") lineWidth(0.8) line(x0, _flow y, x1, _flow y)
+        (head == nil) ifTrue { return nil }
         self _tableRow(page, head at(0), widths, aligns, cut, x0, _flow y, pad, size, lh)
         _flow space(head at(1))
         page strokeColor("#000000") lineWidth(0.4) line(x0, _flow y, x1, _flow y)
@@ -425,6 +504,13 @@ KnitDoc = Object clone {
             (cut at(j)) ifTrue { page restore }
             x = x + w
             j = j + 1
+        }
+    }
+
+    // Printed Markdown (results=asis), laid out as the report's text is
+    _markdown(text) {
+        (KnitMarkdown blocks(((text replace("\r\n", "\n")) split("\n")))) each { |b|
+            ((b get("kind")) == "front") ifFalse { self _block(b) }
         }
     }
 

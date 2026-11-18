@@ -79,6 +79,16 @@ Test describe("Markdown tables") {
         Test assertEqual(bs map { |b| b get("kind") }, ["para", "para", "para", "rule"])
         Test assertEqual(bs first get("text"), "| a | b | | just text |")
     }
+    Test it("takes a Table: paragraph after or before a table as its caption") {
+        bs = KnitMarkdown blocks(Lines of("| a |\n|---|\n\nTable: After *it*.\n\n: Before.\n\n| b |\n|---|\n\nTable: alone"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["table", "table", "para"])
+        Test assertEqual(bs map { |b| b get("caption") }, ["After *it*.", "Before.", nil])
+        Test assertEqual(bs last get("text"), "Table: alone")
+    }
+    Test it("reads quoted option values") {
+        bs = KnitMarkdown blocks(Lines of("```{clay results='asis'}\n```\n```clay results=\"hide\"\n```"))
+        Test assertEqual(bs map { |b| b get("options") get("results") }, ["asis", "hide"])
+    }
     Test it("ends a paragraph at a table") {
         bs = KnitMarkdown blocks(Lines of("text\n| a |\n|---|\n| 1 |"))
         Test assertEqual(bs map { |b| b get("kind") }, ["para", "table"])
@@ -101,6 +111,24 @@ Test describe("Markdown text") {
         r = KnitMarkdown runs("A **b** c", true)
         Test assertEqual(r map { |p| p at(1) }, ["Helvetica-Bold", "Helvetica-Bold", "Helvetica-Bold"])
         Test assertEqual(KnitMarkdown plain("A **b** c"), "A b c")
+    }
+}
+
+Test describe("Knit table") {
+    Test it("writes Arrays as a Markdown table, numbers on the right") {
+        md = Knit table([["a", 1], ["b", 22]], #{header: ["name", "n"]})
+        Test assertEqual(md, "| name | n |\n|:--|--:|\n| a | 1 |\n| b | 22 |\n")
+    }
+    Test it("takes Dicts, digits, alignments, captions, nils and pipes") {
+        rows = [#{k: "x|y", v: 1.5, w: 2}, #{k: "z", v: nil, w: 3}]
+        md = Knit table(rows, #{digits: 2, align: ["c"], caption: "Some"})
+        Test assertEqual(Lines of(md), ["Table: Some", "", "| k | v | w |", "|:-:|--:|--:|", "| x\\|y | 1.50 | 2 |", "| z |  | 3 |", ""])
+        t = (KnitMarkdown blocks(Lines of(md))) first
+        Test assertEqual([t get("caption"), t get("rows") first], ["Some", ["x|y", "1.50", "2"]])
+    }
+    Test it("rounds to digits, and leaves a header out if not given") {
+        Test assertEqual([Knit _fixed(3.14159, 2), Knit _fixed(-0.05, 1), Knit _fixed(2.5, 0), Knit _fixed(0.004, 3)], ["3.14", "-0.1", "3", "0.004"])
+        Test assertEqual(Lines of(Knit table([[1, 2]])) at(0), "|  |  |")
     }
 }
 
@@ -176,6 +204,17 @@ Test describe("render") {
         Test assertTrue(pdf contains("(12) Tj"))
         Test assertFalse(pdf contains("|"))
         Test assertTrue(pdf contains("/Helvetica-Bold"))
+    }
+    Test it("lays out printed Markdown with results=asis, numbering captioned tables") {
+        md = "```{clay results='asis'}\nKnit table([[\"pears\", 0.25]], #{header: [\"fruit\", \"kg\"], digits: 2, caption: \"Fruit\"}) println\n\"**done**\" println\n```\n```clay results=hide\n\"quiet\" println\n```\n"
+        File write(dir + "/asis.md", md)
+        pdf = File read(Knit render(dir + "/asis.md"))
+        Test assertTrue(pdf contains("(Table 1: ) Tj"))
+        Test assertTrue(pdf contains("(Fruit) Tj"))
+        Test assertTrue(pdf contains("(0.25) Tj"))
+        Test assertTrue(pdf contains("(done) Tj"))
+        Test assertFalse(pdf contains("(quiet) Tj"))
+        Test assertFalse(pdf contains("(| fruit"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

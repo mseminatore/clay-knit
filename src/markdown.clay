@@ -13,7 +13,8 @@
 //   table    a header row, a delimiter row (|---|:--:|) and rows: "header" and
 //            each of "rows" an Array of cell texts (rows padded or cut to the
 //            header's size), "align" ("left", "center", "right" a column),
-//            "code" (the lines as they are)
+//            "code" (the lines as they are), "caption" (from a paragraph
+//            "Table: text" just after or before it) or nil
 //   image    a paragraph that is only ![alt](path): "alt", "path"
 //   rule     ---, *** or ___
 //
@@ -151,7 +152,44 @@ KnitMarkdown = Object clone {
                 }
             }
         }
+        KnitMarkdown _captions(out)
+    }
+
+    // A paragraph "Table: text" (or ": text") just after a table, or else
+    // just before one, is its caption: the table's "caption", the paragraph gone
+    _captions(blocks) {
+        out = []
+        i = 0
+        n = blocks size
+        { i < n } whileTrue {
+            b = blocks at(i)
+            cap = KnitMarkdown _caption(b)
+            used = false
+            (cap != nil) ifTrue {
+                prev = (out size > 0) ifTrue { out at(out size - 1) } ifFalse { nil }
+                ((prev != nil) && (prev get("kind") == "table") && (prev get("caption") == nil)) ifTrue {
+                    prev set("caption", cap)
+                    used = true
+                } ifFalse {
+                    next = (i + 1 < n) ifTrue { blocks at(i + 1) } ifFalse { nil }
+                    ((next != nil) && (next get("kind") == "table")) ifTrue {
+                        next set("caption", cap)
+                        used = true
+                    }
+                }
+            }
+            used ifFalse { out push(b) }
+            i = i + 1
+        }
         out
+    }
+
+    _caption(b) {
+        (b get("kind") != "para") ifTrue { return nil }
+        t = b get("text")
+        (t startsWith("Table:")) ifTrue { return (t slice(6, t length)) trim }
+        (t startsWith(": ")) ifTrue { return (t slice(2, t length)) trim }
+        nil
     }
 
     // ---- inline text ----------------------------------------------------------
@@ -307,7 +345,7 @@ KnitMarkdown = Object clone {
         (words slice(1, words size)) each { |w|
             eq = w indexOf("=")
             (eq > 0) ifTrue {
-                v = (w slice(eq + 1, w length)) lower
+                v = (KnitMarkdown _unquote(w slice(eq + 1, w length))) lower
                 opts set(w slice(0, eq), (v == "true") ifTrue { true } ifFalse { (v == "false") ifTrue { false } ifFalse { v } })
             } ifFalse {
                 (w == "norun") ifTrue { opts set("eval", false) } ifFalse { opts set(w, true) }

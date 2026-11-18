@@ -59,6 +59,8 @@ System exit(1)
 | `output` | true | show what it printed, and its figure |
 | `eval` | true | run it; `norun` is short for `eval=false` |
 
+Table: Chunk options.
+
 Columns are left, centered or right aligned by the colons in the line under the header:
 
 | x | x² | x³ |
@@ -66,5 +68,12 @@ Columns are left, centered or right aligned by the colons in the line under the 
 | 1 | 1 | 1 |
 | 2 | 4 | 8 |
 | 10 | 100 | 1000 |
+
+A chunk with `results=asis` prints Markdown, and `Knit table` makes a table from data:
+
+```{clay results='asis'}
+rows = (1..5) map { |i| #{n: i, root: Math sqrt(i), even: (i % 2 == 0) ifTrue { "yes" } ifFalse { "no" }} }
+Knit table(rows, #{digits: 3, caption: "Square roots, from `Knit table`."}) println
+```
 
 That's all.

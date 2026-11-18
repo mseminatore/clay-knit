@@ -47,6 +47,10 @@ A chunk is a fenced block whose language is `clay`. Options go after it, in eith
 | `echo=false` | Run the chunk, but don't show its code |
 | `output=false` | Run it, but don't show what it printed or its figure |
 | `eval=false` (or `norun`) | Show the code without running it |
+| `results=asis` | Lay out what it prints as Markdown: text, lists, tables... |
+| `results=hide` | Don't show what it prints (its figure still shows) |
+
+Values can be quoted, as knitr's are: `results='asis'`.
 
 Chunks share their variables, as lines of one script do. What a chunk prints (`println`,
 `Console print`) appears below its code. If it leaves a figure with something plotted in it
@@ -84,7 +88,36 @@ long table continues on the next page under its header again.
 |:--------|------:|-------------|
 | Q1      |    12 | first       |
 | Q2      |    30 | **best**    |
+
+Table: Sales by quarter
 ```
+
+A paragraph `Table: text` (or `: text`) just after a table, or just before it, is its caption,
+shown above the table as "Table 1: text"; captioned tables are numbered in order.
+
+### Tables from data
+
+`Knit table(rows, opts)` makes the Markdown for a table, like knitr's `kable`; print it in a
+`results=asis` chunk:
+
+````markdown
+```{clay results='asis'}
+sales = [#{quarter: "Q1", sales: 12, growth: nil},
+         #{quarter: "Q2", sales: 30, growth: 1.5}]
+Knit table(sales, #{header: ["Quarter", "Sales", "Growth"], digits: 2,
+    caption: "Sales by quarter"}) println
+```
+````
+
+Rows are Arrays, or Dicts (the first one's keys are the columns, in order). A cell is its
+value's `toString`; `nil` is empty, and `|`s and line breaks are escaped.
+
+| Option | |
+|---|---|
+| `header` | The column names (default: the Dicts' keys; none for Arrays) |
+| `align` | A column's `"l"`, `"c"` or `"r"` (or `left`...); columns of numbers go right, others left |
+| `digits` | Decimal places, for columns with numbers that are not whole |
+| `caption` | The table's caption |
 
 Text uses the standard PDF fonts (Helvetica, and Courier for code), so it covers
 Windows-1252: Western European letters, `°`, `€`, curly quotes and dashes. Other characters
@@ -92,9 +125,9 @@ show as `?`.
 
 ## Not yet
 
-- Tables made by a chunk (knitr's `results='asis'`), table captions
+- Figure captions, and cross-references to tables and figures
 - Math (`$x^2$`): planned through LaTeX, as SVG
-- HTML output, chunk options for figure size, captions, cross-references
+- HTML output, chunk options for figure size
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works
