@@ -1,0 +1,21 @@
+{
+  "lockfile_version": 1,
+  "locked": {
+    "plot": {
+      "url": "github.com/mseminatore/clay-plot@v0.5.3",
+      "version": "v0.5.3",
+      "resolved": "9f457040a99ae07ea3ff1043347e332fa401721b"
+    },
+    "pdf": {
+      "url": "github.com/mseminatore/clay-pdf@v0.1.1",
+      "version": "v0.1.1",
+      "resolved": "f1aec2e60159605a512a66ee97106cfc96c507b3"
+    },
+    "image": {
+      "url": "github.com/mseminatore/clay-image@v0.3.0",
+      "version": "v0.3.0",
+      "resolved": "f680027070b0e6dc17f552315839b96154b1f10a",
+      "dependency_of": "plot"
+    }
+  }
+}

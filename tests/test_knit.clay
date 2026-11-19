@@ -149,6 +149,27 @@ Test describe("inline code") {
     }
 }
 
+Test describe("figure size") {
+    Test it("reads image attributes") {
+        bs = KnitMarkdown blocks(Lines of("![A](a.png){#fig-a width=50% align=left .wide}\n\n![B](b.png){width=\"3 in\"}\n\n![C](c.png) {not attrs}"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["image", "image", "para"])
+        Test assertEqual([bs first get("label"), bs first get("width"), bs first get("align")], ["fig-a", "50%", "left"])
+        Test assertEqual(bs at(1) get("width"), "3 in")
+    }
+    Test it("reads numbers and widths, and refuses others") {
+        Test assertEqual([Knit _num("4"), Knit _num("4.5"), Knit _num(".5"), Knit _num("4in"), Knit _num("1.2.3"), Knit _num("")], [4, 4.5, 0.5, nil, nil, nil])
+        Test assertRaises({ Knit _positive("wide", "fig.width") })
+        Test assertRaises({ Knit _positive("0", "fig.width") })
+        dir = File tempDir
+        File write(dir + "/w.md", "x\n")
+        doc = KnitDoc new(dir + "/w.md", dir + "/w.pdf")
+        Test assertEqual((["50%", "2in", "72pt", "100px", "100", "20in"] map { |w| Math round(doc _shownWidth(w, 1000)) }), [234, 144, 72, 75, 75, 468])
+        Test assertEqual(Math round(doc _shownWidth("2.54cm", 1000)), 72)
+        Test assertEqual([doc _shownWidth(nil, 100), doc _shownWidth(nil, 1000)], [100, 468])
+        Test assertRaises({ doc _shownWidth("big", 100) })
+    }
+}
+
 Test describe("cross-references") {
     Test it("reads labels on chunks, images and table captions") {
         md = "```{clay #fig-a caption=\"A\"}\n```\n```clay label=fig-b\n```\n![dot](d.png){#fig-c}\n\n| x |\n|---|\n\nTable: Cap. {#tbl-d}\n\n| y |\n|---|\n\nTable: {#tbl-e}"
@@ -313,6 +334,23 @@ Test describe("render") {
         e = Test assertRaises({ Knit render(dir + "/badinline.md") })
         Test assertTrue(e message contains("badinline.md:5"))
         Test assertTrue(e message contains("DivisionByZero"))
+    }
+    Test it("makes a chunk's figures at fig.width x fig.height, for that chunk only") {
+        md = "---\nfig-height: 3\n---\n```{clay fig.width=4, fig.height=2}\n(Plot rc get(\"figure.figsize\")) println\nPlot plot([1, 2])\n```\n```clay\n(Plot rc get(\"figure.figsize\")) println\n```\n```clay\nPlot figure(#{figsize: [2, 1]})\nPlot plot([1, 2])\n```\n"
+        File write(dir + "/size.md", md)
+        pdf = File read(Knit render(dir + "/size.md"))
+        Test assertTrue(pdf contains("([4, 2]) Tj"))
+        Test assertTrue(pdf contains("([6.4, 3]) Tj"))           // the report's fig-height, the default width
+        // centered on the text (72 to 540): 4 in (288 pt) wide starts at 162, 2 in at 234
+        Test assertTrue(pdf contains("1 0 0 1 162 "))
+        Test assertTrue(pdf contains("1 0 0 1 234 "))
+        Test assertEqual(Plot rc get("figure.figsize"), [6.4, 4.8])
+    }
+    Test it("reports a bad size at the chunk") {
+        File write(dir + "/badsize.md", "# x\n\n```{clay fig.width=wide}\n1\n```\n")
+        e = Test assertRaises({ Knit render(dir + "/badsize.md") })
+        Test assertTrue(e message contains("badsize.md:3"))
+        Test assertTrue(e message contains("fig.width is a number above 0, not 'wide'"))
     }
     Test it("gives chunks the report's folder") {
         File write(dir + "/data.txt", "42")

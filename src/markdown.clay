@@ -15,7 +15,9 @@
 //            header's size), "align" ("left", "center", "right" a column),
 //            "code" (the lines as they are), "caption" (from a paragraph
 //            "Table: text" just after or before it) or nil
-//   image    a paragraph that is only ![alt](path): "alt", "path"
+//   image    a paragraph that is only ![alt](path), maybe with {#label
+//            width=50% align=left} after it: "alt", "path", "label", "width",
+//            "align"
 //   rule     ---, *** or ___
 //
 // runs(text, bold) turns inline Markdown into runs for clay-pdf's wrapRuns:
@@ -144,7 +146,9 @@ KnitMarkdown = Object clone {
                                         text = parts join(" ")
                                         img = KnitMarkdown _image(text)
                                         (img != nil) ifTrue {
-                                            out push(#{kind: "image", line: start, alt: img at(0), path: img at(1), label: img at(2)})
+                                            a = img at(2)
+                                            out push(#{kind: "image", line: start, alt: img at(0), path: img at(1), label: a get("#"),
+                                                width: a get("width"), align: a get("align") ?? (a get("fig-align"))})
                                         } ifFalse {
                                             out push(#{kind: "para", line: start, text: text})
                                         }
@@ -565,24 +569,44 @@ KnitMarkdown = Object clone {
         out
     }
 
-    // ![alt](path) alone, maybe with {#label} after it: [alt, path, label],
-    // else nil
+    // ![alt](path) alone, maybe with attributes after it ({#fig-x
+    // width=50%}): [alt, path, attributes (a Dict)], else nil
     _image(t) {
-        parts = KnitMarkdown _label(t)
+        parts = KnitMarkdown _attrs(t)
         t = parts at(0)
         ((t startsWith("![")) && (t endsWith(")"))) ifFalse { return nil }
         mid = t indexOf("](")
         (mid < 0) ifTrue { return nil }
-        [t slice(2, mid), t slice(mid + 2, t length - 1), parts at(1)]
+        [t slice(2, mid), t slice(mid + 2, t length - 1), (parts at(1)) ?? #{}]
+    }
+
+    // Text ending in pandoc's attributes, {#label key=value ...}: [the text
+    // before them, trimmed, a Dict of them ("#": the label)]; else [text, nil].
+    // (.class words are allowed and ignored.)
+    _attrs(t) {
+        t = t trim
+        start = t lastIndexOf("{")
+        ((t endsWith("}")) && (start >= 0)) ifFalse { return [t, nil] }
+        words = KnitMarkdown _words(t slice(start + 1, t length - 1))
+        (words size == 0) ifTrue { return [t, nil] }
+        attrs = #{}
+        ok = true
+        words each { |w|
+            eq = w indexOf("=")
+            ((w startsWith("#")) && (w length > 1)) ifTrue { attrs set("#", w slice(1, w length)) } ifFalse {
+                (eq > 0) ifTrue { attrs set(w slice(0, eq), KnitMarkdown _unquote(w slice(eq + 1, w length))) } ifFalse {
+                    ((w startsWith(".")) && (w length > 1)) ifFalse { ok = false }
+                }
+            }
+        }
+        ok ifTrue { [(t slice(0, start)) trim, attrs] } ifFalse { [t, nil] }
     }
 
     // Text ending in {#label}: [the text before it, trimmed, label]; else
     // [text, nil]
     _label(t) {
-        t = t trim
-        start = t lastIndexOf("{#")
-        ((t endsWith("}")) && (start >= 0) && ((t slice(start, t length)) contains(" ") == false)) ifFalse { return [t, nil] }
-        [(t slice(0, start)) trim, t slice(start + 2, t length - 1)]
+        parts = KnitMarkdown _attrs(t)
+        [parts at(0), ((parts at(1)) == nil) ifTrue { nil } ifFalse { (parts at(1)) get("#") }]
     }
 
     // ---- inline code ---------------------------------------------------------

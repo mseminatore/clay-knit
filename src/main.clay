@@ -186,6 +186,29 @@ Knit = Object clone {
         ((v toString) replace("\n", " ") replace("\r", "")) replace("|", "\\|")
     }
 
+    // A number written as text ("4", "4.5", ".5"), else nil
+    _num(t) {
+        s = (t toString) trim
+        ok = s length > 0
+        dots = 0
+        digits = 0
+        (s bytes) each { |c|
+            (c == 46) ifTrue { dots = dots + 1 } ifFalse {
+                ((c >= 48) && (c <= 57)) ifTrue { digits = digits + 1 } ifFalse { ok = false }
+            }
+        }
+        (ok && (dots <= 1) && (digits > 0)) ifTrue { s toFloat } ifFalse { nil }
+    }
+
+    // An option's value as a number above 0 (nil if not given); raises if it
+    // is something else
+    _positive(v, name) {
+        (v == nil) ifTrue { return nil }
+        n = Knit _num(v)
+        ((n == nil) || (n <= 0)) ifTrue { raise("knit: " + name + " is a number above 0, not '" + v toString + "'") }
+        n
+    }
+
     // x with digits decimal places
     _fixed(x, digits) {
         (digits <= 0) ifTrue { return (Math round(x)) toString }
@@ -240,7 +263,12 @@ KnitDoc = Object clone {
         self _codeSize = 9
         self _chunkOpts = #{}
         self _items = []          // what to lay out at the end: blocks, chunks' code, output, figures
+        // the front matter's fields are the report's defaults for chunk options (fig-width...)
+        first = (_blocks size > 0) ifTrue { _blocks first } ifFalse { nil }
+        self _defaults = ((first != nil) && ((first get("kind")) == "front")) ifTrue { first get("fields") } ifFalse { #{} }
+        self _savedSize = nil
         self _figureCaption = []
+        self _captionBox = nil
         self
     }
 
@@ -259,6 +287,7 @@ KnitDoc = Object clone {
         b = self _upTo(k)
         self _chunkOpts = b get("options")
         ((_chunkOpts get("echo")) != false) ifTrue { _items push(#{kind: "code", code: b get("code")}) }
+        self _figureSize
     }
 
     // After chunk k: what it printed, and its figure
@@ -277,10 +306,73 @@ KnitDoc = Object clone {
         ((fig != nil) && (fig axesList size > 0) && show) ifTrue {
             cap = (_chunkOpts get("caption")) ?? (_chunkOpts get("fig.cap"))
             (cap == true) ifTrue { cap = nil }
-            _items push(#{kind: "figure", fig: fig, caption: cap, label: _chunkOpts get("label")})
+            _items push(#{kind: "figure", fig: fig, caption: cap, label: _chunkOpts get("label"),
+                width: self _opt("out.width"), align: self _opt("fig.align")})
         }
         Plot close
+        (_savedSize != nil) ifTrue {
+            Plot rc set("figure.figsize", _savedSize)
+            self _savedSize = nil
+        }
         _items push(#{kind: "space", height: 6})
+    }
+
+    // A chunk option, or else the report's default (front matter), as
+    // knitr spells it (fig.width) or as Quarto does (fig-width)
+    _opt(name) {
+        dash = name replace(".", "-")
+        v = (_chunkOpts get(name)) ?? (_chunkOpts get(dash))
+        (v == nil) ifTrue { v = (_defaults get(name)) ?? (_defaults get(dash)) }
+        v
+    }
+
+    // fig.width, fig.height (inches) and fig.asp (height / width): the size
+    // figures made in this chunk get, unless its code gives one (figsize).
+    // One of width and height alone keeps the default's shape.
+    _figureSize() {
+        w = Knit _positive(self _opt("fig.width"), "fig.width")
+        h = Knit _positive(self _opt("fig.height"), "fig.height")
+        asp = Knit _positive(self _opt("fig.asp"), "fig.asp")
+        ((w == nil) && (h == nil) && (asp == nil)) ifTrue { return nil }
+        base = Plot rc get("figure.figsize")
+        self _savedSize = base
+        fw = w ?? (base at(0))
+        fh = h
+        (fh == nil) ifTrue {
+            fh = (asp != nil) ifTrue { fw * asp } ifFalse {
+                (w != nil) ifTrue { fw * ((base at(1)) / ((base at(0)) * 1.0)) } ifFalse { base at(1) }
+            }
+        }
+        Plot rc set("figure.figsize", [fw, fh])
+    }
+
+    // The width a figure (or image) is shown at: its own (natural, points),
+    // or width (out.width: "50%" of the text, "3in", "8cm", "60mm", "200pt",
+    // or pixels, "300px" or "300"); never wider than the text
+    _shownWidth(width, natural) {
+        (width == nil) ifTrue { return Math min(_flow width, natural) }
+        t = (width toString) trim
+        units = [["%", _flow width / 100.0], ["in", 72], ["cm", 72 / 2.54], ["mm", 72 / 25.4], ["pt", 1], ["px", 0.75], ["", 0.75]]
+        w = nil
+        units each { |u|
+            ((w == nil) && (t endsWith(u at(0)))) ifTrue {
+                n = Knit _num((t slice(0, t length - ((u at(0)) length))) trim)
+                (n != nil) ifTrue { w = n * (u at(1)) }
+            }
+        }
+        ((w == nil) || (w <= 0)) ifTrue { raise("knit: a width is a size like 50%, 3in, 8cm or 200pt, not '" + t + "'") }
+        Math min(_flow width, w)
+    }
+
+    // The report's default for an option (front matter), either spelling
+    _defaultOpt(name) { (_defaults get(name)) ?? (_defaults get(name replace(".", "-"))) }
+
+    // Where a figure w wide starts: align "left", "right", or centered
+    _alignX(w, align) {
+        a = ((align ?? "center") toString) lower
+        (a == "left") ifTrue { return _flow x }
+        (a == "right") ifTrue { return _flow x + _flow width - w }
+        _flow x + (_flow width - w) / 2
     }
 
     // The rest of the text; numbering; layout; page numbers; save
@@ -601,20 +693,31 @@ KnitDoc = Object clone {
     // its caption under it
     _figure(b) {
         fig = b get("fig")
-        w = Math min(_flow width, fig widthIn * 72)
+        w = self _shownWidth(b get("width"), fig widthIn * 72)
         h = w * (fig heightIn / (fig widthIn * 1.0))
-        page = self _figureSpace(h, b)
-        x = _flow x + (_flow width - w) / 2
+        x = self _alignX(w, b get("align"))
+        page = self _figureSpace(h, b, x, w, b get("align"))
         fig drawPdf(page, x, _flow y, w)
         self _figureEnd(h)
     }
 
-    // Room for a figure h tall and its caption, kept on one page
-    _figureSpace(h, b) {
+    // Room for a figure h tall and its caption, kept on one page. The
+    // caption goes under the figure (x, w wide): centered on the text, or
+    // for a figure aligned left or right, in a box at least 3 inches wide
+    // aligned with it
+    _figureSpace(h, b, x, w, align) {
+        a = ((align ?? "center") toString) lower
+        boxW = _flow width
+        boxX = _flow x
+        ((a == "left") || (a == "right")) ifTrue {
+            boxW = Math min(_flow width, Math max(w, 216))
+            boxX = (a == "left") ifTrue { x } ifFalse { x + w - boxW }
+        }
+        self _captionBox = [boxX, boxW]
         lines = []
         (b get("number") != nil) ifTrue {
             text = (b get("kind") == "image") ifTrue { b get("alt") } ifFalse { b get("caption") }
-            lines = self _caption(b get("number"), text)
+            lines = self _caption(b get("number"), text, boxW)
         }
         self _figureCaption = lines
         _flow ensure(h + ((lines size > 0) ifTrue { 4 + lines size * (_size - 1) * 1.3 } ifFalse { 0 }))
@@ -624,25 +727,29 @@ KnitDoc = Object clone {
         _flow advance(h)
         (_figureCaption size > 0) ifTrue {
             _flow space(4)
-            self _drawCaption(_figureCaption)
+            self _drawCaption(_figureCaption, _captionBox at(0), _captionBox at(1))
         }
         _flow space(10)
     }
 
     // A caption's lines: "Figure n: " in bold, then the text (Markdown;
-    // nil or "": just "Figure n"), wrapped to the text width
-    _caption(name, text) {
-        ((text == nil) || (text toString == "")) ifTrue { return Pdf wrapRuns([[name, "Helvetica-Bold"]], _flow width, _size - 1) }
-        Pdf wrapRuns([[name + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(text toString), _flow width, _size - 1)
+    // nil or "": just "Figure n"), wrapped to width (default: the text's)
+    _caption(name, text, width = nil) {
+        w = width ?? _flow width
+        ((text == nil) || (text toString == "")) ifTrue { return Pdf wrapRuns([[name, "Helvetica-Bold"]], w, _size - 1) }
+        Pdf wrapRuns([[name + ": ", "Helvetica-Bold"]] + KnitMarkdown runs(text toString), w, _size - 1)
     }
 
-    // Caption lines, centered on the text, from the flow's place down
-    _drawCaption(lines) {
+    // Caption lines, centered in a box (x, width; default: the text), from
+    // the flow's place down
+    _drawCaption(lines, x = nil, width = nil) {
         size = _size - 1
         lh = size * 1.3
         ascent = Pdf ascent("Helvetica", size)
+        bx = x ?? _flow x
+        bw = width ?? _flow width
         lines each { |l|
-            _flow page runs(_flow x + (_flow width - (l at(1))) / 2, _flow y + ascent, l at(0), size)
+            _flow page runs(bx + (bw - (l at(1))) / 2, _flow y + ascent, l at(0), size)
             _flow space(lh)
         }
     }
@@ -655,10 +762,12 @@ KnitDoc = Object clone {
         try { img = _pdf loadImage(full) } catch { |e|
             return self _para([["[image " + path + ": " + e message + "]", "Helvetica-Oblique", "#aa0000"]], 0)
         }
-        w = Math min(_flow width, img width * 0.75)
+        w = self _shownWidth((b get("width")) ?? (self _defaultOpt("out.width")), img width * 0.75)
         h = w * (img height / (img width * 1.0))
-        page = self _figureSpace(h, b)
-        page image(img, _flow x + (_flow width - w) / 2, _flow y, w, h)
+        align = (b get("align")) ?? (self _defaultOpt("fig.align"))
+        x = self _alignX(w, align)
+        page = self _figureSpace(h, b, x, w, align)
+        page image(img, x, _flow y, w, h)
         self _figureEnd(h)
     }
 }

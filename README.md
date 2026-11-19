@@ -50,6 +50,24 @@ A chunk is a fenced block whose language is `clay`. Options go after it, in eith
 | `results=asis` | Lay out what it prints as Markdown: text, lists, tables... |
 | `results=hide` | Don't show what it prints (its figure still shows) |
 | `caption="..."` (or `fig.cap`) | The figure's caption |
+| `fig.width=5`, `fig.height=3` | The size (inches) the chunk's figures are made at; one alone keeps the default's shape |
+| `fig.asp=0.5` | The height as a fraction of the width |
+| `out.width="50%"` | How wide the figure is shown: `50%` of the text, `3in`, `8cm`, `60mm`, `200pt` or `300px`; it is scaled, text and all |
+| `fig.align=left` | `center` (the default), `left` or `right` |
+
+The size options can also be spelled as Quarto does (`fig-width`), and set for the whole report
+in the front matter:
+
+```markdown
+---
+title: Sales
+fig-width: 5
+fig-height: 3
+---
+```
+
+A figure made with its own size (`Plot figure(#{figsize: [8, 3]})`) keeps it: the options set
+the size figures get when the code doesn't say. A figure is never shown wider than the text.
 
 Values can be quoted, as knitr's are (`results='asis'`), and must be if they have spaces or
 commas: `{clay caption="Sales, by quarter", echo=false}`.
@@ -98,7 +116,8 @@ Front matter (`title`, `author`, `date`, between `---` lines), headings, paragra
 **bold**, *italic*, `code` (and ``` ``code with ` in it`` ```) and links (shown in blue), bulleted and numbered lists (nested by
 indenting), quotes, horizontal rules, other fenced code, tables, and images on a line of their
 own (`![alt](plot.png)`, PNG or JPEG, relative to the report; the alt text, if any, is its
-caption, numbered with the figures). Pages are US Letter with 1-inch
+caption, numbered with the figures; `{width=50% align=left}` after it sizes and places it, as
+`out.width` and `fig.align` do). Pages are US Letter with 1-inch
 margins and page numbers.
 
 Tables are GitHub's: a header row, a line of `---` cells (`:--`, `:-:` and `--:` align a
@@ -182,7 +201,7 @@ used twice) on stderr. Other `@`s, as in `me@example.com`, are left alone.
 ## Not yet
 
 - Math (`$x^2$`): planned through LaTeX, as SVG
-- HTML output, chunk options for figure size
+- HTML output
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works
