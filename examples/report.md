@@ -1,7 +1,7 @@
 ---
 title: "A first **knit** report"
 author: Clay
-date: 2026-11-17
+date: `{clay} Date now format("%m-%d-%Y")`
 ---
 
 # Introduction
