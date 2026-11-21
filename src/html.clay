@@ -1,0 +1,249 @@
+// KnitHtml -- writes a knitted report as one self-contained HTML page
+//
+// KnitDoc collects the report as items (Markdown blocks, chunks' code, what
+// they printed, their figures) and numbers its figures and tables; for an
+// .html output it hands them here instead of laying out a PDF. Figures go in
+// as clay-plot's interactive SVG (hover for values, click a legend entry to
+// hide its series), or static with interactive=false; images are embedded as
+// data: URIs, and the styles are in the page, so it needs no other file.
+
+KnitHtml = Object clone {
+    // The page for doc's items (KnitDoc, after numbering)
+    page(doc) {
+        out = []
+        title = "Report"
+        lang = "en"
+        (doc _items) each { |b|
+            ((b get("kind")) == "front") ifTrue {
+                t = (b get("fields")) get("title")
+                (t != nil) ifTrue { title = KnitMarkdown plain(t) }
+                l = (b get("fields")) get("lang")
+                (l != nil) ifTrue { lang = l }
+            }
+        }
+        out push("<!DOCTYPE html>\n<html lang=\"" + (KnitHtml esc(lang)) + "\">\n<head>\n<meta charset=\"utf-8\">\n")
+        out push("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+        out push("<title>" + (KnitHtml esc(title)) + "</title>\n<style>\n" + KnitHtml css + "</style>\n</head>\n<body>\n<main>\n")
+        (doc _items) each { |b| out push(KnitHtml block(doc, b)) }
+        out push("</main>\n</body>\n</html>\n")
+        out join("")
+    }
+
+    block(doc, b) {
+        kind = b get("kind")
+        (kind == "front") ifTrue { return KnitHtml front(b get("fields")) }
+        (kind == "heading") ifTrue {
+            lv = (b get("level")) toString
+            text = b get("text")
+            return "<h" + lv + " id=\"" + (KnitHtml slug(KnitMarkdown plain(text))) + "\">" + (KnitHtml runs(KnitMarkdown runs(text))) + "</h" + lv + ">\n"
+        }
+        (kind == "para") ifTrue { return "<p>" + (KnitHtml runs(KnitMarkdown runs(b get("text")))) + "</p>\n" }
+        (kind == "quote") ifTrue { return "<blockquote><p>" + (KnitHtml runs(KnitMarkdown runs(b get("text")))) + "</p></blockquote>\n" }
+        (kind == "list") ifTrue { return KnitHtml list(b get("items")) }
+        (kind == "code") ifTrue { return KnitHtml code(b get("code"), "code", b get("lang")) }
+        (kind == "chunk") ifTrue { return KnitHtml code(b get("code"), "code", "clay") }
+        (kind == "output") ifTrue {
+            lines = (b get("text")) split("\n")
+            ((lines size > 0) && ((lines last) == "")) ifTrue { lines = lines slice(0, lines size - 1) }
+            return KnitHtml code(lines, "output", nil)
+        }
+        (kind == "table") ifTrue { return KnitHtml table(b) }
+        (kind == "image") ifTrue { return KnitHtml image(doc, b) }
+        (kind == "figure") ifTrue { return KnitHtml figure(b) }
+        (kind == "rule") ifTrue { return "<hr>\n" }
+        ""
+    }
+
+    front(fields) {
+        out = "<header>\n"
+        title = fields get("title")
+        (title != nil) ifTrue { out = out + "<h1 class=\"title\">" + (KnitHtml runs(KnitMarkdown runs(title))) + "</h1>\n" }
+        ["author", "date"] each { |key|
+            v = fields get(key)
+            (v != nil) ifTrue { out = out + "<p class=\"" + key + "\">" + (KnitHtml runs(KnitMarkdown runs(v))) + "</p>\n" }
+        }
+        out + "</header>\n"
+    }
+
+    // Styled runs ([text, font, color, url]) as HTML
+    runs(rs) {
+        (rs map { |r|
+            text = KnitHtml esc(r at(0))
+            font = (r at(1)) ?? "Helvetica"
+            color = (r size > 2) ifTrue { r at(2) } ifFalse { nil }
+            url = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
+            (font == "Courier") ifTrue { text = "<code>" + text + "</code>" } ifFalse {
+                (font contains("Oblique")) ifTrue { text = "<em>" + text + "</em>" }
+                (font contains("Bold")) ifTrue { text = "<strong>" + text + "</strong>" }
+            }
+            (url != nil) ifTrue { text = "<a href=\"" + (KnitHtml esc(url)) + "\">" + text + "</a>" } ifFalse {
+                (color == "#aa0000") ifTrue { text = "<span class=\"missing\">" + text + "</span>" }
+            }
+            text
+        }) join("")
+    }
+
+    // A list block's items ([ordered, marker, text, depth]) as nested lists
+    list(items) {
+        out = []
+        open = []            // the open lists' tags, outermost first
+        items each { |it|
+            d = it at(3)
+            tag = (it at(0)) ifTrue { "ol" } ifFalse { "ul" }
+            { open size > d + 1 } whileTrue { out push("</li></" + open last + ">\n"); open = open slice(0, open size - 1) }
+            // a list of the other kind at this depth ends the one before
+            ((open size == d + 1) && ((open last) != tag)) ifTrue {
+                out push("</li></" + open last + ">\n")
+                open = open slice(0, open size - 1)
+            }
+            (open size == d + 1) ifTrue { out push("</li>\n") }
+            { open size < d + 1 } whileTrue {
+                start = ""
+                (tag == "ol") ifTrue {
+                    n = Knit _num((it at(1)) slice(0, (it at(1)) length - 1))
+                    ((n != nil) && (n != 1)) ifTrue { start = " start=\"" + (Math round(n)) toString + "\"" }
+                }
+                out push("<" + tag + start + ">\n")
+                open = open + [tag]
+            }
+            out push("<li>" + (KnitHtml runs(KnitMarkdown runs(it at(2)))))
+        }
+        { open size > 0 } whileTrue { out push("</li></" + open last + ">\n"); open = open slice(0, open size - 1) }
+        out join("")
+    }
+
+    // Lines of code or output in a <pre>; blank lines at the end left out
+    code(lines, cls, lang) {
+        ls = lines map { |l| (l replace("\t", "    ")) replace("\r", "") }
+        { (ls size > 0) && (((ls last) trim) == "") } whileTrue { ls = ls slice(0, ls size - 1) }
+        (ls size == 0) ifTrue { return "" }
+        attr = ((lang != nil) && (lang != "")) ifTrue { " class=\"language-" + (KnitHtml esc(lang)) + "\"" } ifFalse { "" }
+        "<pre class=\"" + cls + "\"><code" + attr + ">" + (KnitHtml esc(ls join("\n"))) + "</code></pre>\n"
+    }
+
+    table(b) {
+        out = ["<div class=\"table\">\n"]
+        // the caption above, as wide as the text (a <caption> is only as wide as the table)
+        (b get("number") != nil) ifTrue { out push("<p class=\"caption\">" + (KnitHtml caption(b get("number"), b get("caption"))) + "</p>\n") }
+        out push("<table>\n")
+        aligns = b get("align")
+        cell = { |tag, text, j|
+            a = aligns at(j)
+            style = (a == "left") ifTrue { "" } ifFalse { " style=\"text-align:" + a + "\"" }
+            "<" + tag + style + ">" + (KnitHtml runs(KnitMarkdown runs(text))) + "</" + tag + ">"
+        }
+        header = b get("header")
+        (((header filter { |c| c != "" }) size) > 0) ifTrue {
+            out push("<thead><tr>" + (((0..(header size - 1)) map { |j| cell value("th", header at(j), j) }) join("")) + "</tr></thead>\n")
+        }
+        out push("<tbody>\n")
+        (b get("rows")) each { |r|
+            out push("<tr>" + (((0..(r size - 1)) map { |j| cell value("td", r at(j), j) }) join("")) + "</tr>\n")
+        }
+        out push("</tbody></table></div>\n")
+        out join("")
+    }
+
+    // "Figure n: " in bold, then the caption (Markdown)
+    caption(name, text) {
+        ((text == nil) || (text toString == "")) ifTrue { return "<strong>" + (KnitHtml esc(name)) + "</strong>" }
+        "<strong>" + (KnitHtml esc(name)) + ":</strong> " + (KnitHtml runs(KnitMarkdown runs(text toString)))
+    }
+
+    // A chunk's figure: its SVG, interactive unless the chunk says
+    // interactive=false; out.width sets how wide it shows, fig.align where
+    figure(b) {
+        fig = b get("fig")
+        live = ((b get("interactive")) ?? true) toString lower
+        svg = fig toSvg(#{interactive: (live != "false") && (live != "no")})
+        svg = svg slice(svg indexOf("<svg"), svg length)
+        KnitHtml figureBox(svg, b, b get("caption"))
+    }
+
+    // An image file, embedded as a data: URI
+    image(doc, b) {
+        path = b get("path")
+        full = ((Knit _isAbsolute(path)) || ((doc _dir) == ".")) ifTrue { path } ifFalse { (doc _dir) + "/" + path }
+        lower = path lower
+        mime = (lower endsWith(".png")) ifTrue { "image/png" } ifFalse {
+            ((lower endsWith(".jpg")) || (lower endsWith(".jpeg"))) ifTrue { "image/jpeg" } ifFalse {
+                (lower endsWith(".gif")) ifTrue { "image/gif" } ifFalse {
+                    (lower endsWith(".svg")) ifTrue { "image/svg+xml" } ifFalse { nil }
+                }
+            }
+        }
+        ((mime == nil) || ((File exists(full)) == false)) ifTrue {
+            why = (mime == nil) ifTrue { "not a PNG, JPEG, GIF or SVG file" } ifFalse { "no such file" }
+            return "<p><span class=\"missing\">[image " + (KnitHtml esc(path)) + ": " + why + "]</span></p>\n"
+        }
+        tag = "<img src=\"data:" + mime + ";base64," + (PlotSvg base64(File read(full))) + "\" alt=\"" + (KnitHtml esc(b get("alt") ?? "")) + "\">"
+        bb = #{width: (b get("width")) ?? (doc _defaultOpt("out.width")), align: (b get("align")) ?? (doc _defaultOpt("fig.align")),
+               number: b get("number")}
+        KnitHtml figureBox(tag, bb, b get("alt"))
+    }
+
+    // A figure or image in a <figure>, sized and aligned, with its caption
+    figureBox(content, b, text) {
+        style = ""
+        w = b get("width")
+        (w != nil) ifTrue { style = "width:" + (KnitHtml cssLength(w)) + ";" }
+        a = ((b get("align") ?? "center") toString) lower
+        cls = ((a == "left") || (a == "right")) ifTrue { " class=\"" + a + "\"" } ifFalse { "" }
+        cap = (b get("number") != nil) ifTrue { "<figcaption>" + (KnitHtml caption(b get("number"), text)) + "</figcaption>\n" } ifFalse { "" }
+        "<figure" + cls + ((style == "") ifTrue { "" } ifFalse { " style=\"" + style + "\"" }) + ">\n" + content + cap + "</figure>\n"
+    }
+
+    // out.width as CSS: 50%, 3in, 8cm, 60mm, 200pt, 300px (a plain number is pixels)
+    cssLength(w) {
+        t = (w toString) trim
+        n = Knit _num(t)
+        (n != nil) ifTrue { return t + "px" }
+        ok = false
+        ["%", "in", "cm", "mm", "pt", "px"] each { |u|
+            ((ok == false) && (t endsWith(u)) && ((Knit _num(t slice(0, t length - u length))) != nil)) ifTrue { ok = true }
+        }
+        ok ifFalse { raise("knit: a width is a size like 50%, 3in, 8cm or 200pt, not '" + t + "'") }
+        t
+    }
+
+    // An id from a heading: lower case, words joined by -
+    slug(text) {
+        out = []
+        dash = false
+        ((text lower) bytes) each { |c|
+            (((c >= 97) && (c <= 122)) || ((c >= 48) && (c <= 57)) || (c >= 128)) ifTrue {
+                (dash && (out size > 0)) ifTrue { out push(45) }
+                dash = false
+                out push(c)
+            } ifFalse { dash = true }
+        }
+        (out size == 0) ifTrue { "section" } ifFalse { String fromBytes(out) }
+    }
+
+    esc(s) {
+        (s == nil) ifTrue { return "" }
+        (((s toString) replace("&", "&amp;")) replace("<", "&lt;") replace(">", "&gt;")) replace("\"", "&quot;")
+    }
+
+    css() {
+        "body{margin:0;background:#ffffff;color:#1a1a1a;font:16px/1.55 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Helvetica,Arial,sans-serif}\n" +
+        "main{max-width:46em;margin:0 auto;padding:2em 1.25em 4em}\n" +
+        "header{text-align:center;margin-bottom:2em}h1.title{margin-bottom:.3em}header p{margin:.2em 0;color:#444}\n" +
+        "h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.6em 0 .6em}h1{font-size:1.7em}h1.title{font-size:2.1em;margin-top:.5em}h2{font-size:1.35em}h3{font-size:1.15em}\n" +
+        "a{color:#1a5fb4}code{font:.9em/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}\n" +
+        "p code,li code,td code,th code{background:#f3f3f3;padding:.1em .3em;border-radius:3px}\n" +
+        "pre{margin:.8em 0;padding:.7em .9em;overflow-x:auto;font-size:.9em;line-height:1.4}\n" +
+        "pre.code{background:#f3f3f3;border-radius:4px}pre.output{border-left:3px solid #b0b0b0;padding-top:.2em;padding-bottom:.2em}\n" +
+        "pre code{font-size:1em;background:none;padding:0}\n" +
+        "blockquote{margin:1em 0;padding:0 1em;color:#555555;border-left:3px solid #dddddd}\n" +
+        "figure{margin:1.5em auto;text-align:center;max-width:100%}figure.left{margin-left:0}figure.right{margin-right:0}\n" +
+        "figure svg,figure img{max-width:100%;height:auto;display:block;margin:0 auto}\n" +
+        "figure[style] svg,figure[style] img{width:100%}\n" +
+        "figcaption{font-size:.92em;margin-top:.5em}\n" +
+        "div.table{overflow-x:auto;margin:1.2em 0}table{border-collapse:collapse;margin:0 auto}\n" +
+        "p.caption{font-size:.92em;margin:0 0 .4em;text-align:center}th,td{padding:.3em .7em}\n" +
+        "thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}\n" +
+        "thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}\n" +
+        "hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}\n"
+    }
+}

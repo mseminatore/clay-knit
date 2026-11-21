@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A first knit report</title>
+<style>
+body{margin:0;background:#ffffff;color:#1a1a1a;font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+main{max-width:46em;margin:0 auto;padding:2em 1.25em 4em}
+header{text-align:center;margin-bottom:2em}h1.title{margin-bottom:.3em}header p{margin:.2em 0;color:#444}
+h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.6em 0 .6em}h1{font-size:1.7em}h1.title{font-size:2.1em;margin-top:.5em}h2{font-size:1.35em}h3{font-size:1.15em}
+a{color:#1a5fb4}code{font:.9em/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+p code,li code,td code,th code{background:#f3f3f3;padding:.1em .3em;border-radius:3px}
+pre{margin:.8em 0;padding:.7em .9em;overflow-x:auto;font-size:.9em;line-height:1.4}
+pre.code{background:#f3f3f3;border-radius:4px}pre.output{border-left:3px solid #b0b0b0;padding-top:.2em;padding-bottom:.2em}
+pre code{font-size:1em;background:none;padding:0}
+blockquote{margin:1em 0;padding:0 1em;color:#555555;border-left:3px solid #dddddd}
+figure{margin:1.5em auto;text-align:center;max-width:100%}figure.left{margin-left:0}figure.right{margin-right:0}
+figure svg,figure img{max-width:100%;height:auto;display:block;margin:0 auto}
+figure[style] svg,figure[style] img{width:100%}
+figcaption{font-size:.92em;margin-top:.5em}
+div.table{overflow-x:auto;margin:1.2em 0}table{border-collapse:collapse;margin:0 auto}
+p.caption{font-size:.92em;margin:0 0 .4em;text-align:center}th,td{padding:.3em .7em}
+thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}
+thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}
+hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1 class="title">A first <strong>knit</strong> report</h1>
+<p class="author">Clay</p>
+<p class="date">11-21-2026</p>
+</header>
+<h1 id="introduction">Introduction</h1>
+<p>This report is <em>Markdown</em> with <strong>Clay chunks</strong>. Each chunk runs, and the report shows its code, what it printed and its figure. Inline <code>code</code>, <a href="https://example.com">links</a> and <strong><em>bold italics</em></strong> work too.</p>
+<ul>
+<li>chunks share variables, like one script</li>
+<li>output is captured with <code>Console capture</code><ul>
+<li>nested items are indented</li></ul>
+</li>
+<li>figures come from the <code>plot</code> brick</li></ul>
+<ol>
+<li>first</li>
+<li>second</li></ol>
+<h2 id="data">Data</h2>
+<pre class="code"><code class="language-clay">xs = (0..40) map { |i| i / 4.0 }
+ys = xs map { |x| Math sin(x) * Math exp(0 - x / 6) }
+(&quot;points: &quot; + xs size toString) println
+(&quot;peak: &quot; + (ys reduce(0) { |m, y| Math max(m, y) }) toString) println</code></pre>
+<pre class="output"><code>points: 41
+peak: 0.77684987</code></pre>
+<p>The data has 41 points and peaks at 0.777. The next chunk plots it, as Figure 1.</p>
+<pre class="code"><code class="language-clay">Plot figure(#{figsize: [6, 3]})
+Plot plot(xs, ys, #{label: &quot;damped sine&quot;})
+Plot title(&quot;A damped sine&quot;)
+Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
+<figure>
+<svg id="plt2a755362270b" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="300" viewBox="0 0 600 300" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<line x1="84.35" y1="37.5" x2="84.35" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="179.3" y1="37.5" x2="179.3" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="274.25" y1="37.5" x2="274.25" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="369.2" y1="37.5" x2="369.2" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="464.15" y1="37.5" x2="464.15" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="559.09" y1="37.5" x2="559.09" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="241.53" x2="582.83" y2="241.53" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="203.43" x2="582.83" y2="203.43" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="165.33" x2="582.83" y2="165.33" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="127.23" x2="582.83" y2="127.23" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="89.13" x2="582.83" y2="89.13" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<line x1="60.62" y1="51.03" x2="582.83" y2="51.03" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
+<clipPath id="clip1"><rect x="60.62" y="37.5" width="522.21" height="207.64"/></clipPath>
+<g clip-path="url(#clip1)">
+<g class="plt-s" data-s="1">
+<polyline points="84.35,165.33 96.22,129.16 108.09,98.11 119.96,73.65 131.83,56.78 143.7,47.9 155.57,46.94 167.43,53.31 179.3,66.04 191.17,83.83 203.04,105.2 214.91,128.55 226.78,152.29 238.64,174.92 250.51,195.16 262.38,211.95 274.25,224.55 286.12,232.5 297.99,235.7 309.86,234.33 321.72,228.84 333.59,219.9 345.46,208.32 357.33,195.04 369.2,181 381.07,167.11 392.93,154.23 404.8,143.06 416.67,134.15 428.54,127.86 440.41,124.37 452.28,123.67 464.15,125.59 476.01,129.78 487.88,135.82 499.75,143.18 511.62,151.32 523.49,159.66 535.36,167.68 547.22,174.92 559.09,180.99" fill="none" stroke="#1f77b4" stroke-width="2.08" stroke-linecap="butt" stroke-linejoin="round"/>
+</g>
+</g>
+<line x1="60.62" y1="37.5" x2="582.83" y2="37.5" fill="none" stroke="#000000" stroke-width="1.11" stroke-linecap="square"/>
+<line x1="60.62" y1="245.14" x2="582.83" y2="245.14" fill="none" stroke="#000000" stroke-width="1.11" stroke-linecap="square"/>
+<line x1="60.62" y1="37.5" x2="60.62" y2="245.14" fill="none" stroke="#000000" stroke-width="1.11" stroke-linecap="square"/>
+<line x1="582.83" y1="37.5" x2="582.83" y2="245.14" fill="none" stroke="#000000" stroke-width="1.11" stroke-linecap="square"/>
+<line x1="84.35" y1="245.14" x2="84.35" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="84.35" y="265.42" font-size="13.89" text-anchor="middle">0</text>
+<line x1="179.3" y1="245.14" x2="179.3" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="179.3" y="265.42" font-size="13.89" text-anchor="middle">2</text>
+<line x1="274.25" y1="245.14" x2="274.25" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="274.25" y="265.42" font-size="13.89" text-anchor="middle">4</text>
+<line x1="369.2" y1="245.14" x2="369.2" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="369.2" y="265.42" font-size="13.89" text-anchor="middle">6</text>
+<line x1="464.15" y1="245.14" x2="464.15" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="464.15" y="265.42" font-size="13.89" text-anchor="middle">8</text>
+<line x1="559.09" y1="245.14" x2="559.09" y2="250" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="559.09" y="265.42" font-size="13.89" text-anchor="middle">10</text>
+<line x1="55.76" y1="241.53" x2="60.62" y2="241.53" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="246.53" font-size="13.89" text-anchor="end">−0.50</text>
+<line x1="55.76" y1="203.43" x2="60.62" y2="203.43" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="208.43" font-size="13.89" text-anchor="end">−0.25</text>
+<line x1="55.76" y1="165.33" x2="60.62" y2="165.33" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="170.33" font-size="13.89" text-anchor="end">0.00</text>
+<line x1="55.76" y1="127.23" x2="60.62" y2="127.23" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="132.23" font-size="13.89" text-anchor="end">0.25</text>
+<line x1="55.76" y1="89.13" x2="60.62" y2="89.13" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="94.13" font-size="13.89" text-anchor="end">0.50</text>
+<line x1="55.76" y1="51.03" x2="60.62" y2="51.03" fill="none" stroke="#000000" stroke-width="1.11"/>
+<text x="50.9" y="56.03" font-size="13.89" text-anchor="end">0.75</text>
+<text x="321.72" y="284.86" font-size="13.89" text-anchor="middle">x</text>
+<text x="321.72" y="25.17" font-size="16.67" text-anchor="middle">A damped sine</text>
+<rect x="435.99" y="44.44" width="139.89" height="25" fill="#ffffff" stroke="#cccccc" stroke-width="1.11" opacity="0.8"/>
+<g class="plt-l" data-s="1" style="cursor:pointer">
+<rect x="441.55" y="46.53" width="128.78" height="20.83" fill="#ffffff" opacity="0"/>
+<line x1="441.55" y1="56.94" x2="469.33" y2="56.94" fill="none" stroke="#1f77b4" stroke-width="2.08"/>
+<text x="480.44" y="61.94" font-size="13.89">damped sine</text>
+</g>
+<script type="text/javascript">//<![CDATA[
+(function(){var svg=document.getElementById("plt2a755362270b");if(!svg)return;var D={a:[[60.62,37.5,522.21,207.64]],t:[[0,0,1,84.35,165.33,["damped sine","x: 0","y: 0"],"#1f77b4"],
+[0,0,1,96.22,129.16,["damped sine","x: 0.25","y: 0.2373"],"#1f77b4"],
+[0,0,1,108.09,98.11,["damped sine","x: 0.5","y: 0.4411"],"#1f77b4"],
+[0,0,1,119.96,73.65,["damped sine","x: 0.75","y: 0.6015"],"#1f77b4"],
+[0,0,1,131.83,56.78,["damped sine","x: 1","y: 0.7123"],"#1f77b4"],
+[0,0,1,143.7,47.9,["damped sine","x: 1.25","y: 0.7705"],"#1f77b4"],
+[0,0,1,155.57,46.94,["damped sine","x: 1.5","y: 0.7768"],"#1f77b4"],
+[0,0,1,167.43,53.31,["damped sine","x: 1.75","y: 0.7351"],"#1f77b4"],
+[0,0,1,179.3,66.04,["damped sine","x: 2","y: 0.6515"],"#1f77b4"],
+[0,0,1,191.17,83.83,["damped sine","x: 2.25","y: 0.5348"],"#1f77b4"],
+[0,0,1,203.04,105.2,["damped sine","x: 2.5","y: 0.3945"],"#1f77b4"],
+[0,0,1,214.91,128.55,["damped sine","x: 2.75","y: 0.2413"],"#1f77b4"],
+[0,0,1,226.78,152.29,["damped sine","x: 3","y: 0.08559"],"#1f77b4"],
+[0,0,1,238.64,174.92,["damped sine","x: 3.25","y: −0.06295"],"#1f77b4"],
+[0,0,1,250.51,195.16,["damped sine","x: 3.5","y: −0.1957"],"#1f77b4"],
+[0,0,1,262.38,211.95,["damped sine","x: 3.75","y: −0.3059"],"#1f77b4"],
+[0,0,1,274.25,224.55,["damped sine","x: 4","y: −0.3886"],"#1f77b4"],
+[0,0,1,286.12,232.5,["damped sine","x: 4.25","y: −0.4408"],"#1f77b4"],
+[0,0,1,297.99,235.7,["damped sine","x: 4.5","y: −0.4618"],"#1f77b4"],
+[0,0,1,309.86,234.33,["damped sine","x: 4.75","y: −0.4528"],"#1f77b4"],
+[0,0,1,321.72,228.84,["damped sine","x: 5","y: −0.4167"],"#1f77b4"],
+[0,0,1,333.59,219.9,["damped sine","x: 5.25","y: −0.3581"],"#1f77b4"],
+[0,0,1,345.46,208.32,["damped sine","x: 5.5","y: −0.2821"],"#1f77b4"],
+[0,0,1,357.33,195.04,["damped sine","x: 5.75","y: −0.1949"],"#1f77b4"],
+[0,0,1,369.2,181,["damped sine","x: 6","y: −0.1028"],"#1f77b4"],
+[0,0,1,381.07,167.11,["damped sine","x: 6.25","y: −0.01171"],"#1f77b4"],
+[0,0,1,392.93,154.23,["damped sine","x: 6.5","y: 0.07281"],"#1f77b4"],
+[0,0,1,404.8,143.06,["damped sine","x: 6.75","y: 0.1461"],"#1f77b4"],
+[0,0,1,416.67,134.15,["damped sine","x: 7","y: 0.2046"],"#1f77b4"],
+[0,0,1,428.54,127.86,["damped sine","x: 7.25","y: 0.2458"],"#1f77b4"],
+[0,0,1,440.41,124.37,["damped sine","x: 7.5","y: 0.2687"],"#1f77b4"],
+[0,0,1,452.28,123.67,["damped sine","x: 7.75","y: 0.2733"],"#1f77b4"],
+[0,0,1,464.15,125.59,["damped sine","x: 8","y: 0.2608"],"#1f77b4"],
+[0,0,1,476.01,129.78,["damped sine","x: 8.25","y: 0.2333"],"#1f77b4"],
+[0,0,1,487.88,135.82,["damped sine","x: 8.5","y: 0.1936"],"#1f77b4"],
+[0,0,1,499.75,143.18,["damped sine","x: 8.75","y: 0.1453"],"#1f77b4"],
+[0,0,1,511.62,151.32,["damped sine","x: 9","y: 0.09196"],"#1f77b4"],
+[0,0,1,523.49,159.66,["damped sine","x: 9.25","y: 0.03722"],"#1f77b4"],
+[0,0,1,535.36,167.68,["damped sine","x: 9.5","y: −0.01543"],"#1f77b4"],
+[0,0,1,547.22,174.92,["damped sine","x: 9.75","y: −0.06292"],"#1f77b4"],
+[0,0,1,559.09,180.99,["damped sine","x: 10","y: −0.1028"],"#1f77b4"]]},FS=13.89,R=13.89;var NS='http://www.w3.org/2000/svg',hidden={};function mk(n,a){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);return e;}var hl=mk('g',{'pointer-events':'none'}),tip=mk('g',{'pointer-events':'none'});var box=mk('rect',{rx:3,ry:3,fill:'#ffffff','fill-opacity':0.95,stroke:'#999999','stroke-width':1});var txt=mk('text',{'font-size':FS,fill:'#222222'});tip.appendChild(box);tip.appendChild(txt);tip.style.display='none';svg.appendChild(hl);svg.appendChild(tip);function fmt(v){if(v===null||v===undefined)return '-';var a=Math.abs(v);if(a!==0&&(a>=1e6||a<1e-4))return v.toExponential(3);return String(Number(v.toPrecision(4)));}function at(e){var p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}function inAx(x,y){for(var i=D.a.length-1;i>=0;i--){var b=D.a[i];if(x>=b[0]&&x<=b[0]+b[2]&&y>=b[1]&&y<=b[1]+b[3])return i;}return -1;}function find(x,y){var ax=inAx(x,y);if(ax<0)return null;var best=null,bd=R*R,hit=null,i,t;for(i=0;i<D.t.length;i++){t=D.t[i];if(t[1]!==ax||hidden[t[2]])continue;if(t[0]===0){var dx=t[3]-x,dy=t[4]-y,d=dx*dx+dy*dy;if(d<=bd){bd=d;best={x:t[3],y:t[4],lines:t[5],c:t[6],k:'p'};}}else if(t[0]===1){if(x>=t[3]&&x<=t[3]+t[5]&&y>=t[4]&&y<=t[4]+t[6])hit={x:t[3],y:t[4],w:t[5],h:t[6],lines:t[7],c:t[8],k:'r'};}else if(t[0]===3){var ex=x-t[3],ey=t[4]-y,r=Math.sqrt(ex*ex+ey*ey);if(r>=t[5]&&r<=t[6]){var a=Math.atan2(ey,ex)*180/Math.PI,lo=Math.min(t[7],t[8]),hi=Math.max(t[7],t[8]);while(a<lo)a+=360;while(a>lo+360)a-=360;if(a<=hi)hit={x:x,y:y,lines:t[9],c:t[10],k:'w'};}}else if(t[0]===2&&!hit){if(x>=t[3]&&x<t[3]+t[5]&&y>=t[4]&&y<t[4]+t[6]){var cw=t[5]/t[8],ch=t[6]/t[7],c=Math.floor((x-t[3])/cw),rr=Math.floor((y-t[4])/ch),row=t[9]?t[7]-1-rr:rr;var v=t[10][row*t[8]+c],ls=[t[11]];ls.push((t[12]?t[12][row]:'row '+row)+', '+(t[13]?t[13][c]:'column '+c));ls.push('value: '+fmt(v));hit={x:t[3]+c*cw,y:t[4]+rr*ch,w:cw,h:ch,lines:ls,c:'#000000',k:'r'};}}}return best||hit;}function hide(){tip.style.display='none';while(hl.firstChild)hl.removeChild(hl.firstChild);}function show(h,x,y){while(hl.firstChild)hl.removeChild(hl.firstChild);if(h.k==='p')hl.appendChild(mk('circle',{cx:h.x,cy:h.y,r:FS*0.45,fill:'none',stroke:h.c||'#000000','stroke-width':2}));if(h.k==='r')hl.appendChild(mk('rect',{x:h.x,y:h.y,width:h.w,height:h.h,fill:'none',stroke:'#000000','stroke-width':1.5,'stroke-opacity':0.6}));while(txt.firstChild)txt.removeChild(txt.firstChild);var n=0;for(var i=0;i<h.lines.length;i++){var l=h.lines[i];if(l===''||l===null)continue;var s=mk('tspan',{x:0,dy:n===0?0:FS*1.25});if(i===0&&h.lines.length>1)s.setAttribute('font-weight','bold');s.textContent=l;txt.appendChild(s);n++;}if(n===0){hide();return;}tip.style.display='';var b=txt.getBBox(),p=FS*0.4;box.setAttribute('x',b.x-p);box.setAttribute('y',b.y-p);box.setAttribute('width',b.width+2*p);box.setAttribute('height',b.height+2*p);var W=svg.viewBox.baseVal.width,H=svg.viewBox.baseVal.height,tx=x+FS,ty=y+FS*1.5;if(tx+b.width+2*p>W)tx=x-FS-b.width-p;if(ty+b.height+p>H)ty=y-b.height-FS*0.5;if(tx<p)tx=p;if(ty<FS)ty=FS;tip.setAttribute('transform','translate('+tx+','+ty+')');}svg.addEventListener('mousemove',function(e){var p=at(e),h=find(p.x,p.y);if(h)show(h,p.x,p.y);else hide();});svg.addEventListener('mouseleave',hide);var items=svg.querySelectorAll('.plt-l');for(var j=0;j<items.length;j++){(function(it){it.addEventListener('click',function(){var s=it.getAttribute('data-s');hidden[s]=!hidden[s];var gs=svg.querySelectorAll('.plt-s[data-s=\''+s+'\']');for(var k=0;k<gs.length;k++)gs[k].style.display=hidden[s]?'none':'';it.style.opacity=hidden[s]?0.35:1;hide();});})(items[j]);}})();
+//]]></script>
+</svg>
+<figcaption><strong>Figure 1:</strong> A damped sine, from the data above.</figcaption>
+</figure>
+<blockquote><p>A quote: chunks run in order, top to bottom.</p></blockquote>
+<h3 id="hidden-code">Hidden code</h3>
+<pre class="output"><code>this chunk's code is hidden; only its output shows</code></pre>
+<pre class="code"><code class="language-clay">// shown, not run
+System exit(1)</code></pre>
+<hr>
+<h3 id="a-table">A table</h3>
+<div class="table">
+<p class="caption"><strong>Table 1:</strong> Chunk options.</p>
+<table>
+<thead><tr><th>Chunk option</th><th style="text-align:center">Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>echo</code></td><td style="text-align:center">true</td><td>show the chunk's <strong>code</strong></td></tr>
+<tr><td><code>output</code></td><td style="text-align:center">true</td><td>show what it printed, and its figure</td></tr>
+<tr><td><code>eval</code></td><td style="text-align:center">true</td><td>run it; <code>norun</code> is short for <code>eval=false</code></td></tr>
+</tbody></table></div>
+<p>Columns are left, centered or right aligned by the colons in the line under the header:</p>
+<div class="table">
+<table>
+<thead><tr><th style="text-align:right">x</th><th style="text-align:right">x²</th><th style="text-align:right">x³</th></tr></thead>
+<tbody>
+<tr><td style="text-align:right">1</td><td style="text-align:right">1</td><td style="text-align:right">1</td></tr>
+<tr><td style="text-align:right">2</td><td style="text-align:right">4</td><td style="text-align:right">8</td></tr>
+<tr><td style="text-align:right">10</td><td style="text-align:right">100</td><td style="text-align:right">1000</td></tr>
+</tbody></table></div>
+<p>Table 1 lists the chunk options, and Figure 1 is the plot from earlier. A chunk with <code>results=asis</code> prints Markdown, and <code>Knit table</code> makes a table from data:</p>
+<pre class="code"><code class="language-clay">rows = (1..5) map { |i| #{n: i, root: Math sqrt(i), even: (i % 2 == 0) ifTrue { &quot;yes&quot; } ifFalse { &quot;no&quot; }} }
+Knit table(rows, #{digits: 3, caption: &quot;Square roots, from `Knit table`.&quot;}) println</code></pre>
+<div class="table">
+<p class="caption"><strong>Table 2:</strong> Square roots, from <code>Knit table</code>.</p>
+<table>
+<thead><tr><th style="text-align:right">n</th><th style="text-align:right">root</th><th>even</th></tr></thead>
+<tbody>
+<tr><td style="text-align:right">1</td><td style="text-align:right">1.000</td><td>no</td></tr>
+<tr><td style="text-align:right">2</td><td style="text-align:right">1.414</td><td>yes</td></tr>
+<tr><td style="text-align:right">3</td><td style="text-align:right">1.732</td><td>no</td></tr>
+<tr><td style="text-align:right">4</td><td style="text-align:right">2.000</td><td>yes</td></tr>
+<tr><td style="text-align:right">5</td><td style="text-align:right">2.236</td><td>no</td></tr>
+</tbody></table></div>
+<p>That's all.</p>
+</main>
+</body>
+</html>
