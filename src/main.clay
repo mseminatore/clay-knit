@@ -1,9 +1,10 @@
-// knit -- reports from Markdown with Clay code chunks, written as PDF
+// knit -- reports from Markdown with Clay code chunks, written as PDF or HTML
 //
 // Usage:
 //   import("knit")
 //
 //   Knit render("report.md")                  // writes report.pdf
+//   Knit render("report.md", #{format: "html"})   // writes report.html
 //   Knit render("report.md", #{output: "out/report.pdf", keep: true})
 //
 // A report is Markdown with ```clay code chunks, as R Markdown has R chunks.
@@ -19,7 +20,8 @@
 // dir is the report's folder). So an error in a chunk is reported at its line
 // in report.md. The program lays out the PDF as it goes (KnitDoc):
 // text up to a chunk, the chunk's code, then the output Console capture
-// collected and the figure.
+// collected and the figure. For HTML (KnitHtml, html.clay) the same items
+// become one self-contained page, its figures interactive SVG.
 //
 // Every brick shares one set of top-level names with the program that imports
 // it: this one defines Knit, KnitDoc and KnitMarkdown.
@@ -27,18 +29,22 @@
 import("plot")
 import("pdf")
 import("markdown.clay")
+import("html.clay")
 
 Knit = Object clone {
     _doc = nil
 
-    // Run a report's chunks and write it as PDF. opts: output (the PDF's
-    // path; default the report's, ending in .pdf), keep (keep the generated
-    // program), clay (the clay command to run it with). Returns the PDF's path.
+    // Run a report's chunks and write it as PDF or HTML. opts: format
+    // ("pdf" or "html"; default: the output's extension, else the front
+    // matter's format, else "pdf"), output (the file's path; default the
+    // report's, ending in .pdf or .html), keep (keep the generated program),
+    // clay (the clay command to run it with). Returns the output's path.
     render(path, opts = nil) {
         o = opts ?? #{}
         (File exists(path)) ifFalse { raise("knit: no such file " + path) }
         md = File read(path)
-        out = o get("output") ?? (Knit _stem(path) + ".pdf")
+        format = Knit _format(o get("format"), o get("output"), md)
+        out = o get("output") ?? (Knit _stem(path) + "." + format)
         // the program sits beside the report (so bricks/ there is found too)
         // and runs in this folder, as this program does
         gen = path + ".clay"
@@ -172,6 +178,34 @@ Knit = Object clone {
 
     // ---- helpers ----------------------------------------------------------------
 
+    // "pdf" or "html": the format asked for, else the output's extension,
+    // else the front matter's format (or output: html_document, as R
+    // Markdown's), else "pdf"
+    _format(format, output, md) {
+        pick = { |v|
+            t = (v == nil) ifTrue { "" } ifFalse { (v toString) lower trim }
+            (t startsWith("html")) ifTrue { "html" } ifFalse { (t startsWith("pdf")) ifTrue { "pdf" } ifFalse { nil } }
+        }
+        (format != nil) ifTrue {
+            f = pick value(format)
+            (f == nil) ifTrue { raise("knit: format is \"pdf\" or \"html\", not '" + format toString + "'") }
+            return f
+        }
+        (output != nil) ifTrue {
+            l = (output toString) lower
+            ((l endsWith(".html")) || (l endsWith(".htm"))) ifTrue { return "html" }
+            (l endsWith(".pdf")) ifTrue { return "pdf" }
+        }
+        lines = (md replace("\r\n", "\n")) split("\n")
+        bs = KnitMarkdown blocks(lines)
+        ((bs size > 0) && (((bs first) get("kind")) == "front")) ifTrue {
+            fields = (bs first) get("fields")
+            f = pick value((fields get("format")) ?? (fields get("output")))
+            (f != nil) ifTrue { return f }
+        }
+        "pdf"
+    }
+
     // The clay command: this one, when running in it
     _clay() {
         exe = System executable ?? ""
@@ -251,6 +285,8 @@ KnitDoc = Object clone {
     init(path, out) {
         self _out = out
         self _path = path
+        lo = out lower
+        self _html = (lo endsWith(".html")) || (lo endsWith(".htm"))
         self _dir = Knit _dir(path)
         lines = ((File read(path)) replace("\r\n", "\n")) split("\n")
         // inline code becomes placeholders, for the values once they are known
@@ -286,7 +322,7 @@ KnitDoc = Object clone {
     chunk(k) {
         b = self _upTo(k)
         self _chunkOpts = b get("options")
-        ((_chunkOpts get("echo")) != false) ifTrue { _items push(#{kind: "code", code: b get("code")}) }
+        ((_chunkOpts get("echo")) != false) ifTrue { _items push(#{kind: "code", code: b get("code"), lang: "clay"}) }
         self _figureSize
     }
 
@@ -307,7 +343,7 @@ KnitDoc = Object clone {
             cap = (_chunkOpts get("caption")) ?? (_chunkOpts get("fig.cap"))
             (cap == true) ifTrue { cap = nil }
             _items push(#{kind: "figure", fig: fig, caption: cap, label: _chunkOpts get("label"),
-                width: self _opt("out.width"), align: self _opt("fig.align")})
+                width: self _opt("out.width"), align: self _opt("fig.align"), interactive: self _opt("interactive")})
         }
         Plot close
         (_savedSize != nil) ifTrue {
@@ -380,10 +416,13 @@ KnitDoc = Object clone {
         self _collectTo(_blocks size)
         self _number
         KnitMarkdown useValues(_values)
-        _items each { |b| self _block(b) }
-        (KnitMarkdown missing) each { |label|
-            Console error("knit: " + _path + ": no figure or table is labelled " + label + " (@" + label + ")\n")
+        _html ifTrue {
+            File write(_out, KnitHtml page(self))
+            self _warnMissing
+            return _out
         }
+        _items each { |b| self _block(b) }
+        self _warnMissing
         n = _pdf pageCount
         i = 0
         _pdf pages each { |page|
@@ -393,6 +432,13 @@ KnitDoc = Object clone {
             page textAlign("left")
         }
         _pdf save(_out)
+    }
+
+    // The @fig-x and @tbl-x references to labels nobody has
+    _warnMissing() {
+        (KnitMarkdown missing) each { |label|
+            Console error("knit: " + _path + ": no figure or table is labelled " + label + " (@" + label + ")\n")
+        }
     }
 
     // ---- laying out blocks ------------------------------------------------------

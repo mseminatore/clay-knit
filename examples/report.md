@@ -6,7 +6,7 @@ date: `{clay} Date now format("%m-%d-%Y")`
 
 # Introduction
 
-This report is *Markdown* with **Clay chunks**. Each chunk runs, and the PDF shows
+This report is *Markdown* with **Clay chunks**. Each chunk runs, and the report shows
 its code, what it printed and its figure. Inline `code`, [links](https://example.com)
 and ***bold italics*** work too.
 

@@ -363,4 +363,63 @@ Test describe("render") {
     }
 }
 
+Test describe("HTML") {
+    dir = File tempDir + "/clay_knit_html"
+    (File isDir(dir)) ifFalse { File mkdir(dir) }
+
+    Test it("picks the format from the option, the output's name or the front matter") {
+        Test assertEqual(Knit _format("html", nil, ""), "html")
+        Test assertEqual(Knit _format(nil, "x/r.HTML", ""), "html")
+        Test assertEqual(Knit _format(nil, "r.pdf", "---\nformat: html\n---\n"), "pdf")
+        Test assertEqual(Knit _format(nil, nil, "---\noutput: html_document\n---\n"), "html")
+        Test assertEqual(Knit _format(nil, nil, "# no front matter"), "pdf")
+        Test assertRaises({ Knit _format("docx", nil, "") })
+    }
+    Test it("writes text, code, output and an interactive figure as one page") {
+        md = "---\ntitle: \"A *test*\"\nauthor: Me\n---\n# Results & more\n\nSome **bold**, a [link](https://example.com/?a=1&b=2) and `x < 1`.\n\n- one\n  - nested\n- two\n3. three\n4. four\n\n```clay\ntotal = 6\n(\"total \" + total toString) println\nPlot plot([1, 4, 9], #{label: \"squares\"})\nPlot legend\n```\n\nIt is `{clay} total`.\n"
+        File write(dir + "/r.md", md)
+        out = Knit render(dir + "/r.md", #{format: "html"})
+        Test assertEqual(out, dir + "/r.html")
+        page = File read(out)
+        Test assertTrue(page startsWith("<!DOCTYPE html>"))
+        Test assertTrue(page contains("<title>A test</title>"))
+        Test assertTrue(page contains("<h1 class=\"title\">A <em>test</em></h1>"))
+        Test assertTrue(page contains("<p class=\"author\">Me</p>"))
+        Test assertTrue(page contains("<h1 id=\"results-more\">Results &amp; more</h1>"))
+        Test assertTrue(page contains("<strong>bold</strong>"))
+        Test assertTrue(page contains("<a href=\"https://example.com/?a=1&amp;b=2\">link</a>"))
+        Test assertTrue(page contains("<code>x &lt; 1</code>"))
+        Test assertTrue(page contains("<ul>\n<li>one<ul>\n<li>nested</li></ul>\n</li>\n<li>two</li></ul>\n<ol start=\"3\">"))
+        Test assertTrue(page contains("<pre class=\"code\"><code class=\"language-clay\">total = 6"))
+        Test assertTrue(page contains("<pre class=\"output\"><code>total 6</code></pre>"))
+        Test assertTrue(page contains("<figure>\n<svg id=\"plt"))          // the figure, inline
+        Test assertTrue(page contains("<script"))                          // and interactive
+        Test assertTrue(page contains("It is 6."))
+        Test assertFalse(page contains("<?xml"))
+        File delete(out)
+    }
+    Test it("numbers figures and tables, embeds images and sizes figures") {
+        File write(dir + "/dot.png", Image fromBytes(2, 2, 1, String fromBytes([0, 255, 255, 0])) pngBytes)
+        md = "See @fig-a and @tbl-b.\n\n```{clay #fig-a caption=\"Squares\" out.width=50% fig.align=left interactive=false}\nPlot plot([1, 4])\n```\n\n| x | y |\n|:-:|--:|\n| 1 | 2 |\n\nTable: Numbers. {#tbl-b}\n\n![A dot](dot.png){width=3in}\n\n![](missing.png)\n"
+        File write(dir + "/n.md", md)
+        page = File read(Knit render(dir + "/n.md", #{output: dir + "/n.htm"}))
+        Test assertTrue(page contains("See Figure 1 and Table 1."))
+        Test assertTrue(page contains("<figure class=\"left\" style=\"width:50%;\">"))
+        Test assertTrue(page contains("<figcaption><strong>Figure 1:</strong> Squares</figcaption>"))
+        Test assertFalse(page contains("<script"))                         // interactive=false
+        Test assertTrue(page contains("<p class=\"caption\"><strong>Table 1:</strong> Numbers.</p>"))
+        Test assertTrue(page contains("<th style=\"text-align:center\">x</th><th style=\"text-align:right\">y</th>"))
+        Test assertTrue(page contains("<img src=\"data:image/png;base64,iVBORw0KGgo"))
+        Test assertTrue(page contains("style=\"width:3in;\""))
+        Test assertTrue(page contains("<strong>Figure 2:</strong> A dot"))
+        Test assertTrue(page contains("[image missing.png: no such file]"))
+    }
+    Test it("takes the format from the front matter") {
+        File write(dir + "/f.md", "---\nformat: html\n---\nHello.\n")
+        out = Knit render(dir + "/f.md")
+        Test assertEqual(out, dir + "/f.html")
+        Test assertTrue(File read(out) contains("<p>Hello.</p>"))
+    }
+}
+
 Test run

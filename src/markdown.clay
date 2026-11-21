@@ -21,7 +21,8 @@
 //   rule     ---, *** or ___
 //
 // runs(text, bold) turns inline Markdown into runs for clay-pdf's wrapRuns:
-// **bold**, *italic* (or _italic_), `code`, [links](url) and \-escapes.
+// **bold**, *italic* (or _italic_), `code`, [links](url) and \-escapes. A
+// run is [text, font, color]; a link's has its url fourth.
 
 KnitMarkdown = Object clone {
     _refs = nil
@@ -291,7 +292,8 @@ KnitMarkdown = Object clone {
                     end = KnitMarkdown _find(b, 41, mid + 2)
                     (end > 0) ifTrue {
                         flush value
-                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4"])
+                        // the url too, for HTML (clay-pdf's runs use the first three)
+                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4", text slice(mid + 2, end)])
                         i = end + 1
                         handled = true
                     }

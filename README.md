@@ -1,9 +1,10 @@
 # clay-knit
 
 Reports from Markdown with [Clay](https://github.com/mseminatore/clay) code chunks, written as
-PDF, the way R Markdown's knitr does it for R. The chunks run in order as one program; the PDF
-shows each chunk's code, what it printed and the figure it drew with
-[clay-plot](https://github.com/mseminatore/clay-plot), between the report's text.
+PDF or as a web page, the way R Markdown's knitr does it for R. The chunks run in order as one
+program; the report shows each chunk's code, what it printed and the figure it drew with
+[clay-plot](https://github.com/mseminatore/clay-plot), between the report's text. In the web
+page the figures are interactive: hover for values, click a legend entry to hide its series.
 
 ````markdown
 ---
@@ -28,10 +29,11 @@ Q2 was the best quarter.
 ```clay norun
 import("knit")
 Knit render("sales.md")                     // writes sales.pdf
+Knit render("sales.md", #{format: "html"})  // writes sales.html
 ```
 
 `examples/report.md` shows everything; `clay examples/knit.clay` knits it into
-`examples/report.pdf`.
+`examples/report.pdf`, and `clay examples/knit.clay --html` into `examples/report.html`.
 
 ## Chunks
 
@@ -54,6 +56,7 @@ A chunk is a fenced block whose language is `clay`. Options go after it, in eith
 | `fig.asp=0.5` | The height as a fraction of the width |
 | `out.width="50%"` | How wide the figure is shown: `50%` of the text, `3in`, `8cm`, `60mm`, `200pt` or `300px`; it is scaled, text and all |
 | `fig.align=left` | `center` (the default), `left` or `right` |
+| `interactive=false` | HTML: a static figure, without tooltips and legend toggles |
 
 The size options can also be spelled as Quarto does (`fig-width`), and set for the whole report
 in the front matter:
@@ -198,10 +201,31 @@ Tables and figures are numbered separately, in order. An `@fig-` or `@tbl-` refe
 no such label shows as a red **?@fig-x**, and `Knit render` warns about it (and about a label
 used twice) on stderr. Other `@`s, as in `me@example.com`, are left alone.
 
+## HTML
+
+`Knit render(path, #{format: "html"})`, an output ending in `.html`, or `format: html` in the
+front matter (R Markdown's `output: html_document` works too) writes the report as one web page
+with nothing else to load: its styles are in the page, images are embedded, and each figure is
+clay-plot's interactive SVG. Hover over a point, bar, pie wedge or heatmap cell for its values;
+click a legend entry to hide or show its series. `interactive=false` on a chunk (or in the front
+matter) makes its figures static.
+
+```markdown
+---
+title: Sales
+format: html
+---
+```
+
+Everything else is as in the PDF: chunk options, figure sizes (`out.width` becomes the figure's
+CSS width, so it scales with the window), captions and numbering, cross-references, tables and
+inline code. Headings get ids from their text (`## Data and results` is `#data-and-results`),
+for links into the page. A figure is drawn at its own size and scaled down to fit a narrow
+window; code that is too wide scrolls rather than wraps.
+
 ## Not yet
 
 - Math (`$x^2$`): planned through LaTeX, as SVG
-- HTML output
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works
@@ -214,12 +238,13 @@ lines calls into `Knit`. It runs that with the
 the report: the text up to a chunk, the chunk's code, then what `Console capture` collected
 while it ran, and its figure. When the last chunk has run it numbers the tables and figures,
 then lays everything out (figures with clay-plot's `drawPdf`, on
-[clay-pdf](https://github.com/mseminatore/clay-pdf) pages), so a reference can come before
-what it refers to. Warnings, and what chunks write to stderr, are passed on to stderr.
+[clay-pdf](https://github.com/mseminatore/clay-pdf) pages, or for HTML as one page with
+clay-plot's interactive SVG), so a reference can come before what it refers to. Warnings, and what chunks write to stderr, are passed on to stderr.
 
 | `Knit render(path, opts)` | |
 |---|---|
-| `output` | The PDF's path (default: the report's, ending in `.pdf`) |
+| `format` | `"pdf"` or `"html"` (default: the output's extension, else the front matter's `format`, else PDF) |
+| `output` | The file's path (default: the report's, ending in `.pdf` or `.html`) |
 | `keep` | Keep the generated program |
 | `clay` | The clay command (default: the one running, else `clay` on the PATH) |
 
@@ -237,11 +262,12 @@ clay-image (a native brick, compiled the first time it is used, which needs a C 
 ```sh
 clay bricks install                  # fetches plot, pdf and image into bricks/
 clay tests/test_knit.clay            # a brick can import itself by name
-clay examples/knit.clay              # knits examples/report.md
+clay examples/knit.clay              # knits examples/report.md (--html: as a web page)
 ```
 
 The code is in `src/`: `main.clay` (`Knit`: generating and running the program, and
-`KnitDoc`: laying out the PDF) and `markdown.clay` (`KnitMarkdown`: blocks and inline styles).
+`KnitDoc`: collecting the report and laying out the PDF), `html.clay` (`KnitHtml`: the web
+page) and `markdown.clay` (`KnitMarkdown`: blocks and inline styles).
 `.github/workflows/test.yml` runs the tests on Linux, macOS and Windows.
 
 ## License
