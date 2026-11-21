@@ -19,10 +19,13 @@
 //            width=50% align=left} after it: "alt", "path", "label", "width",
 //            "align"
 //   rule     ---, *** or ___
+//   math     a paragraph that is only $$...$$ (display math): "text", the math
 //
 // runs(text, bold) turns inline Markdown into runs for clay-pdf's wrapRuns:
-// **bold**, *italic* (or _italic_), `code`, [links](url) and \-escapes. A
-// run is [text, font, color]; a link's has its url fourth.
+// **bold**, *italic* (or _italic_), `code`, [links](url), $math$ and
+// \-escapes. A run is [text, font, color], or with options fourth: a link's
+// #{url:}, math's #{scale:, rise:, math: true} (laid out by clay-plot's
+// PlotMath; for PDF, its symbols in the Symbol font, unless forPdf(false)).
 
 KnitMarkdown = Object clone {
     _refs = nil
@@ -151,7 +154,13 @@ KnitMarkdown = Object clone {
                                             out push(#{kind: "image", line: start, alt: img at(0), path: img at(1), label: a get("#"),
                                                 width: a get("width"), align: a get("align") ?? (a get("fig-align"))})
                                         } ifFalse {
-                                            out push(#{kind: "para", line: start, text: text})
+                                            // a paragraph that is only $$...$$: display math
+                                            tt = text trim
+                                            ((tt length > 4) && (tt startsWith("$$")) && (tt endsWith("$$"))) ifTrue {
+                                                out push(#{kind: "math", line: start, text: (tt slice(2, tt length - 2)) trim})
+                                            } ifFalse {
+                                                out push(#{kind: "para", line: start, text: text})
+                                            }
                                         }
                                     }
                                 }
@@ -285,6 +294,19 @@ KnitMarkdown = Object clone {
                     handled = true
                 }
             }
+            // $math$, as Pandoc reads it: the $ that opens is followed by a
+            // non-space, the one that closes follows a non-space and is not
+            // followed by a digit (so "$5 and $10" is text); $$...$$ inline too
+            ((handled == false) && (c == 36)) ifTrue {
+                d = ((i + 1 < n) && (b at(i + 1) == 36)) ifTrue { 2 } ifFalse { 1 }
+                close = KnitMarkdown _mathClose(b, i + d, d)
+                (close > 0) ifTrue {
+                    flush value
+                    (KnitMarkdown _mathRuns(text slice(i + d, close), bold || strong, color)) each { |r| out push(r) }
+                    i = close + d
+                    handled = true
+                }
+            }
             // [text](url)
             ((handled == false) && (c == 91)) ifTrue {
                 mid = KnitMarkdown _find(b, 93, i + 1)
@@ -293,7 +315,7 @@ KnitMarkdown = Object clone {
                     (end > 0) ifTrue {
                         flush value
                         // the url too, for HTML (clay-pdf's runs use the first three)
-                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4", text slice(mid + 2, end)])
+                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4", #{url: text slice(mid + 2, end)}])
                         i = end + 1
                         handled = true
                     }
@@ -342,8 +364,62 @@ KnitMarkdown = Object clone {
         out
     }
 
-    // The text alone, without its markup (for the PDF's title)
-    plain(text) { ((KnitMarkdown runs(text)) map { |r| r at(0) }) join("") }
+    // The text alone, without its markup (for the PDF's title); math as its
+    // characters, as HTML shows them
+    plain(text) {
+        was = _pdfMath
+        self _pdfMath = false
+        t = ((KnitMarkdown runs(text)) map { |r| r at(0) }) join("")
+        self _pdfMath = was
+        t replace("\xc2\xa0", " ")
+    }
+
+    // ---- math ---------------------------------------------------------------
+
+    // For PDF (the default), math's symbols are in the Symbol font, as
+    // clay-plot's PDF figures have them; for HTML, they are Unicode
+    forPdf(on) { self _pdfMath = on }
+    _pdfMath = true
+
+    // Where the $ (or $$, d of them) closing math that starts at byte from
+    // is, or -1: not after a space, not before a digit; none if math would be
+    // empty or start with a space
+    _mathClose(b, from, d) {
+        n = b size
+        ((from >= n) || (KnitMarkdown _space(b, from))) ifTrue { return -1 }
+        j = from + 1
+        { j < n } whileTrue {
+            c = b at(j)
+            (c == 92) ifTrue { j = j + 2 } ifFalse {
+                ((c == 36) && ((d == 1) || ((j + 1 < n) && (b at(j + 1) == 36)))) ifTrue {
+                    after = j + d
+                    ok = (KnitMarkdown _space(b, j - 1) == false) &&
+                         ((after >= n) || ((b at(after) < 48) || (b at(after) > 57)))
+                    ok ifTrue { return j }
+                }
+                j = j + 1
+            }
+        }
+        -1
+    }
+
+    // Math's runs, laid out by clay-plot's PlotMath: [text, font, color,
+    // #{scale:, rise:, math: true}]; spaces in it don't break lines
+    _mathRuns(src, bold, color) {
+        base = KnitMarkdown _font(bold, false)
+        pieces = PlotMath runs("$" + src + "$")
+        _pdfMath ifTrue { pieces = PlotPdf _fontRuns(pieces) }
+        out = []
+        pieces each { |p|
+            t = (p at(0)) replace(" ", "\xc2\xa0")
+            font = ((p size > 3) && ((p at(3)) != nil)) ifTrue { p at(3) } ifFalse { base }
+            // PDF's Helvetica has no minus sign (U+2212): an en dash, as clay-plot's PDF figures draw it
+            (_pdfMath && (font != "Symbol")) ifTrue { t = t replace(PlotTicks minus, "\xe2\x80\x93") }
+            (t != "") ifTrue { out push([t, font, color, #{scale: p at(1), rise: p at(2), math: true}]) }
+        }
+        (out size == 0) ifTrue { out push(["", base, color]) }
+        out
+    }
 
     // ---- helpers --------------------------------------------------------------
 

@@ -21,7 +21,8 @@
 // in report.md. The program lays out the PDF as it goes (KnitDoc):
 // text up to a chunk, the chunk's code, then the output Console capture
 // collected and the figure. For HTML (KnitHtml, html.clay) the same items
-// become one self-contained page, its figures interactive SVG.
+// become one self-contained page, its figures interactive SVG. $math$ in the
+// text is laid out by clay-plot's PlotMath, for both.
 //
 // Every brick shares one set of top-level names with the program that imports
 // it: this one defines Knit, KnitDoc and KnitMarkdown.
@@ -416,6 +417,7 @@ KnitDoc = Object clone {
         self _collectTo(_blocks size)
         self _number
         KnitMarkdown useValues(_values)
+        KnitMarkdown forPdf(_html not)
         _html ifTrue {
             File write(_out, KnitHtml page(self))
             self _warnMissing
@@ -505,6 +507,13 @@ KnitDoc = Object clone {
         (kind == "figure") ifTrue { return self _figure(b) }
         (kind == "output") ifTrue { return self _output(b get("text")) }
         (kind == "space") ifTrue { return _flow space(b get("height")) }
+        (kind == "math") ifTrue {
+            size = _size * 1.15
+            _flow font("Helvetica", size) lineHeight(size * 1.6)
+            _flow space(_size * 0.2)
+            _flow richParagraph(KnitMarkdown runs("$" + (b get("text")) + "$"), "center")
+            return _flow space(_size * 0.6)
+        }
         (kind == "rule") ifTrue {
             page = _flow ensure(12)
             y = _flow y + 6

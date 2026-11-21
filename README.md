@@ -116,7 +116,8 @@ the syntax itself, use two backticks (``` ``{clay} x`` ```) or escape the first 
 ## Markdown
 
 Front matter (`title`, `author`, `date`, between `---` lines), headings, paragraphs,
-**bold**, *italic*, `code` (and ``` ``code with ` in it`` ```) and links (shown in blue), bulleted and numbered lists (nested by
+**bold**, *italic*, `code` (and ``` ``code with ` in it`` ```), links (shown in blue) and
+[math](#math) (`$x^2$`), bulleted and numbered lists (nested by
 indenting), quotes, horizontal rules, other fenced code, tables, and images on a line of their
 own (`![alt](plot.png)`, PNG or JPEG, relative to the report; the alt text, if any, is its
 caption, numbered with the figures; `{width=50% align=left}` after it sizes and places it, as
@@ -140,6 +141,30 @@ Table: Sales by quarter
 
 A paragraph `Table: text` (or `: text`) just after a table, or just before it, is its caption,
 shown above the table as "Table 1: text"; captioned tables are numbered in order.
+
+### Math
+
+Text between `$` signs is math, and a paragraph that is only `$$...$$` is display math, centered
+on a line of its own, as in R Markdown and Quarto:
+
+```markdown
+The curve is $y = \sin(x)\, e^{-x/6}$ and peaks at $x \approx 1.4$. The error is
+
+$$\mathrm{MSE} = \frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2$$
+```
+
+It is TeX's notation as [clay-plot](https://github.com/mseminatore/clay-plot) lays it out in
+figures: `^` and `_` for super- and subscripts (they nest), Greek letters, operators and
+relations (`\leq \neq \approx \pm \times`), big operators (`\sum \prod \int \sqrt{x}`),
+arrows, sets (`\in \subset \cup \mathbb{R}`), logic (`\forall \exists \neg`), `\sin`, `\log`
+and the like upright, and `\frac{a}{b}` as a/b. Math is text, so it can be selected and
+searched: in the PDF in Helvetica and the Symbol font, in HTML as raised and smaller text. It
+doesn't break across lines.
+
+A `$` opens math only before a non-space, and closes it only after a non-space and not before a
+digit, as Pandoc reads it, so `$5 and $10` is text; `\$` is a dollar sign. Math in `code` is
+code. There are no stacked fractions, roots over their argument, matrices or accents (`\hat{y}`
+shows y): for those, draw the formula in a figure, or write it out.
 
 ### Tables from data
 
@@ -225,7 +250,7 @@ window; code that is too wide scrolls rather than wraps.
 
 ## Not yet
 
-- Math (`$x^2$`): planned through LaTeX, as SVG
+- Stacked fractions, roots over their argument, matrices and accents in math (TeX through LaTeX)
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works

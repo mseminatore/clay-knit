@@ -78,4 +78,14 @@ rows = (1..5) map { |i| #{n: i, root: Math sqrt(i), even: (i % 2 == 0) ifTrue { 
 Knit table(rows, #{digits: 3, caption: "Square roots, from `Knit table`."}) println
 ```
 
+### Math
+
+Math goes between dollar signs, in TeX's notation: the curve above is
+$y = \sin(x)\, e^{-x/6}$, it peaks at $x \approx 1.4$, and the mean squared error of a fit is
+
+$$\mathrm{MSE} = \frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2$$
+
+Sets and logic work too: $\forall \epsilon > 0\ \exists \delta$, $x \in \mathbb{R}$,
+$A \cup B \subseteq C$. Prices like $5 and $10 stay text, as does \$x\$.
+
 That's all.

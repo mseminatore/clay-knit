@@ -51,6 +51,7 @@ KnitHtml = Object clone {
         (kind == "image") ifTrue { return KnitHtml image(doc, b) }
         (kind == "figure") ifTrue { return KnitHtml figure(b) }
         (kind == "rule") ifTrue { return "<hr>\n" }
+        (kind == "math") ifTrue { return "<p class=\"math display\">" + (KnitHtml runs(KnitMarkdown runs("$" + (b get("text")) + "$"))) + "</p>\n" }
         ""
     }
 
@@ -65,22 +66,67 @@ KnitHtml = Object clone {
         out + "</header>\n"
     }
 
-    // Styled runs ([text, font, color, url]) as HTML
+    // Styled runs ([text, font, color, options]) as HTML; math runs (in a row)
+    // as one <span class="math">, each piece sized and raised as PlotMath laid it out
     runs(rs) {
-        (rs map { |r|
-            text = KnitHtml esc(r at(0))
-            font = (r at(1)) ?? "Helvetica"
-            color = (r size > 2) ifTrue { r at(2) } ifFalse { nil }
-            url = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
-            (font == "Courier") ifTrue { text = "<code>" + text + "</code>" } ifFalse {
-                (font contains("Oblique")) ifTrue { text = "<em>" + text + "</em>" }
-                (font contains("Bold")) ifTrue { text = "<strong>" + text + "</strong>" }
+        out = []
+        inMath = false
+        rs each { |r|
+            opts = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
+            isMath = (opts != nil) && ((opts get("math")) == true)
+            (isMath != inMath) ifTrue {
+                out push(isMath ifTrue { "<span class=\"math\">" } ifFalse { "</span>" })
+                inMath = isMath
             }
-            (url != nil) ifTrue { text = "<a href=\"" + (KnitHtml esc(url)) + "\">" + text + "</a>" } ifFalse {
-                (color == "#aa0000") ifTrue { text = "<span class=\"missing\">" + text + "</span>" }
-            }
-            text
-        }) join("")
+            out push(isMath ifTrue { KnitHtml mathPiece(r) } ifFalse { KnitHtml run(r) })
+        }
+        inMath ifTrue { out push("</span>") }
+        out join("")
+    }
+
+    // A piece of math: its size and its rise (in its own ems, so the line keeps its height)
+    mathPiece(r) {
+        o = r at(3)
+        scale = (o get("scale")) ?? 1
+        rise = (o get("rise")) ?? 0
+        text = KnitHtml esc(r at(0))
+        (((r at(1)) ?? "") contains("Bold")) ifTrue { text = "<strong>" + text + "</strong>" }
+        ((scale == 1) && (rise == 0)) ifTrue { return text }
+        style = (scale != 1) ifTrue { "font-size:" + (KnitHtml cssNum(scale * 100)) + "%;" } ifFalse { "" }
+        (rise != 0) ifTrue { style = style + "position:relative;top:" + (KnitHtml cssNum(0 - (rise / scale))) + "em;" }
+        "<span style=\"" + style + "\">" + text + "</span>"
+    }
+
+    // A number for CSS: plain ASCII, to 3 decimals
+    cssNum(v) {
+        n = Math round(v * 1000)
+        neg = n < 0
+        n = n abs
+        text = (n / 1000) toString
+        frac = n % 1000
+        (frac != 0) ifTrue {
+            f = frac toString padLeft(3, "0")
+            { f endsWith("0") } whileTrue { f = f slice(0, f length - 1) }
+            text = text + "." + f
+        }
+        (neg && (n != 0)) ifTrue { "-" + text } ifFalse { text }
+    }
+
+    // One styled run as HTML
+    run(r) {
+        text = KnitHtml esc(r at(0))
+        font = (r at(1)) ?? "Helvetica"
+        color = (r size > 2) ifTrue { r at(2) } ifFalse { nil }
+        opts = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
+        url = (opts == nil) ifTrue { nil } ifFalse { opts get("url") }
+        (font == "Courier") ifTrue { text = "<code>" + text + "</code>" } ifFalse {
+            (font contains("Oblique")) ifTrue { text = "<em>" + text + "</em>" }
+            (font contains("Bold")) ifTrue { text = "<strong>" + text + "</strong>" }
+        }
+        (url != nil) ifTrue { text = "<a href=\"" + (KnitHtml esc(url)) + "\">" + text + "</a>" } ifFalse {
+            (color == "#aa0000") ifTrue { text = "<span class=\"missing\">" + text + "</span>" }
+        }
+        text
     }
 
     // A list block's items ([ordered, marker, text, depth]) as nested lists
@@ -244,6 +290,7 @@ KnitHtml = Object clone {
         "p.caption{font-size:.92em;margin:0 0 .4em;text-align:center}th,td{padding:.3em .7em}\n" +
         "thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}\n" +
         "thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}\n" +
-        "hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}\n"
+        "hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}\n" +
+        ".math{white-space:nowrap}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}\n"
     }
 }

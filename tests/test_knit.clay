@@ -120,6 +120,30 @@ Test describe("Markdown text") {
         Test assertEqual(r map { |p| p at(1) }, ["Helvetica-Bold", "Helvetica-Bold", "Helvetica-Bold"])
         Test assertEqual(KnitMarkdown plain("A **b** c"), "A b c")
     }
+    Test it("reads $math$ as Pandoc does") {
+        KnitMarkdown forPdf(false)
+        r = KnitMarkdown runs("so $x^2 \\leq y$ here")
+        Test assertEqual(r map { |p| p at(0) }, ["so ", "x", "2", "\xc2\xa0≤\xc2\xa0y", " here"])   // spaces in math don't break
+        Test assertEqual((r at(2)) at(3), #{scale: 0.7, rise: 0.42, math: true})
+        Test assertEqual(KnitMarkdown plain("costs $5 and $10."), "costs $5 and $10.")   // the second $ is after a space
+        Test assertEqual(KnitMarkdown plain("\\$x\\$"), "$x$")
+        Test assertEqual(KnitMarkdown plain("$ x$"), "$ x$")                      // a space after the first $
+        Test assertEqual(KnitMarkdown plain("$$"), "$$")
+        Test assertEqual(KnitMarkdown plain("$a$5"), "$a$5")                  // a digit after the closing $
+        Test assertEqual(KnitMarkdown plain("$\\alpha$ and $$\\beta$$"), "α and β")
+        Test assertEqual(KnitMarkdown plain("$x \\in \\mathbb{R}$"), "x ∈ ℝ")
+        Test assertEqual(KnitMarkdown plain("`$x$` stays code"), "$x$ stays code")
+        KnitMarkdown forPdf(true)
+        p = KnitMarkdown runs("$a \\neq b$")
+        Test assertEqual(p map { |q| q at(1) }, ["Helvetica", "Symbol", "Helvetica"])    // PDF: symbols in Symbol
+        Test assertEqual((KnitMarkdown runs("$-1$")) first first, "\xe2\x80\x931")           // and the minus an en dash
+        Test assertEqual((KnitMarkdown runs("[a](u)")) first at(3), #{url: "u"})
+    }
+    Test it("reads a paragraph of $$math$$ as display math") {
+        bs = KnitMarkdown blocks(Lines of("$$\nE = mc^2\n$$\n\n$$a$$ and $$b$$ text"))
+        Test assertEqual(bs map { |b| b get("kind") }, ["math", "para"])
+        Test assertEqual(bs first get("text"), "E = mc^2")
+    }
 }
 
 Test describe("inline code") {
@@ -413,6 +437,15 @@ Test describe("HTML") {
         Test assertTrue(page contains("style=\"width:3in;\""))
         Test assertTrue(page contains("<strong>Figure 2:</strong> A dot"))
         Test assertTrue(page contains("[image missing.png: no such file]"))
+    }
+    Test it("writes math as raised and sized spans, and in PDF with the Symbol font") {
+        File write(dir + "/m.md", "Area $\\pi r^2$, and\n\n$$\\sum_i x_i \\neq 0$$\n")
+        page = File read(Knit render(dir + "/m.md", #{format: "html"}))
+        Test assertTrue(page contains("<span class=\"math\">π\xc2\xa0r<span style=\"font-size:70%;position:relative;top:-0.6em;\">2</span></span>"))
+        Test assertTrue(page contains("<p class=\"math display\"><span class=\"math\">∑"))
+        pdf = File read(Knit render(dir + "/m.md"))
+        Test assertTrue(pdf contains("/BaseFont /Symbol"))
+        Test assertTrue(pdf contains("Tf") && (pdf contains("(p) Tj")))                  // π is Symbol's p
     }
     Test it("takes the format from the front matter") {
         File write(dir + "/f.md", "---\nformat: html\n---\nHello.\n")

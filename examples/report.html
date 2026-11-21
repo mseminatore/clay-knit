@@ -24,6 +24,7 @@ p.caption{font-size:.92em;margin:0 0 .4em;text-align:center}th,td{padding:.3em .
 thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}
 thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}
 hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}
+.math{white-space:nowrap}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}
 </style>
 </head>
 <body>
@@ -57,7 +58,7 @@ Plot plot(xs, ys, #{label: &quot;damped sine&quot;})
 Plot title(&quot;A damped sine&quot;)
 Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
 <figure>
-<svg id="plt2a755362270b" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="300" viewBox="0 0 600 300" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">
+<svg id="plt0e7fdce725d9" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="300" viewBox="0 0 600 300" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
 <line x1="84.35" y1="37.5" x2="84.35" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
 <line x1="179.3" y1="37.5" x2="179.3" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
@@ -114,7 +115,7 @@ Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
 <text x="480.44" y="61.94" font-size="13.89">damped sine</text>
 </g>
 <script type="text/javascript">//<![CDATA[
-(function(){var svg=document.getElementById("plt2a755362270b");if(!svg)return;var D={a:[[60.62,37.5,522.21,207.64]],t:[[0,0,1,84.35,165.33,["damped sine","x: 0","y: 0"],"#1f77b4"],
+(function(){var svg=document.getElementById("plt0e7fdce725d9");if(!svg)return;var D={a:[[60.62,37.5,522.21,207.64]],t:[[0,0,1,84.35,165.33,["damped sine","x: 0","y: 0"],"#1f77b4"],
 [0,0,1,96.22,129.16,["damped sine","x: 0.25","y: 0.2373"],"#1f77b4"],
 [0,0,1,108.09,98.11,["damped sine","x: 0.5","y: 0.4411"],"#1f77b4"],
 [0,0,1,119.96,73.65,["damped sine","x: 0.75","y: 0.6015"],"#1f77b4"],
@@ -198,6 +199,10 @@ Knit table(rows, #{digits: 3, caption: &quot;Square roots, from `Knit table`.&qu
 <tr><td style="text-align:right">4</td><td style="text-align:right">2.000</td><td>yes</td></tr>
 <tr><td style="text-align:right">5</td><td style="text-align:right">2.236</td><td>no</td></tr>
 </tbody></table></div>
+<h3 id="math">Math</h3>
+<p>Math goes between dollar signs, in TeX's notation: the curve above is <span class="math">y = sin(x)  e<span style="font-size:70%;position:relative;top:-0.6em;">−x/6</span></span>, it peaks at <span class="math">x ≈ 1.4</span>, and the mean squared error of a fit is</p>
+<p class="math display"><span class="math">MSE = 1/n ∑<span style="font-size:70%;position:relative;top:0.257em;">i=1</span><span style="font-size:70%;position:relative;top:-0.6em;">n</span> (y<span style="font-size:70%;position:relative;top:0.257em;">i</span> − y<span style="font-size:70%;position:relative;top:0.257em;">i</span>)<span style="font-size:70%;position:relative;top:-0.6em;">2</span></span></p>
+<p>Sets and logic work too: <span class="math">∀ ε &gt; 0 ∃ δ</span>, <span class="math">x ∈ ℝ</span>, <span class="math">A ∪ B ⊆ C</span>. Prices like $5 and $10 stay text, as does $x$.</p>
 <p>That's all.</p>
 </main>
 </body>
