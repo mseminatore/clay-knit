@@ -339,10 +339,22 @@ Test describe("render") {
         md = "@fig-w, @tbl-s and @tbl-g.\n\n```{clay #fig-w}\nPlot plot([1, 2])\n```\n| a |\n|---|\n| 1 |\n\nTable: S {#tbl-s}\n\n```{clay results=asis}\nKnit table([[2]], #{label: \"tbl-g\"}) println\n```\nAfter: @fig-w.\n"
         File write(dir + "/refs.md", md)
         pdf = File read(Knit render(dir + "/refs.md"))
-        Test assertTrue(pdf contains("(Figure 1, Table 1 and Table 2.) Tj"))
-        Test assertTrue(pdf contains("(After: Figure 1.) Tj"))
-        Test assertTrue(pdf contains("(Figure 1) Tj"))              // a label without a caption: the number alone
-        Test assertTrue(pdf contains("(Table 2) Tj"))
+        // each reference is a link to its figure or table
+        Test assertTrue(pdf contains("(Figure 1) Tj") && pdf contains("(, ) Tj") && pdf contains("(Table 1) Tj") &&
+                        pdf contains("( and ) Tj") && pdf contains("(Table 2) Tj") && pdf contains("(After: ) Tj"))
+        Test assertEqual((pdf split("/Subtype /Link")) size - 1, 4)
+        Test assertEqual((pdf split("/Dest [")) size - 1, 4)       // all four found their figure or table
+
+    }
+    Test it("makes links clickable and headings bookmarks") {
+        md = "# Intro\n\nSee [the site](https://example.com) or [the results](#results-and-more).\n\n## Details\n\nText.\n\n# Results and more\n\nDone.\n"
+        File write(dir + "/links.md", md)
+        pdf = File read(Knit render(dir + "/links.md"))
+        Test assertTrue(pdf contains("/URI (https://example.com)"))
+        Test assertEqual((pdf split("/Subtype /Link")) size - 1, 2)            // the web link and the one to a heading
+        Test assertTrue(pdf contains("/Outlines ") && pdf contains("/PageMode /UseOutlines"))
+        Test assertTrue(pdf contains("/Title (Intro)") && pdf contains("/Title (Details)") && pdf contains("/Title (Results and more)"))
+        Test assertTrue(pdf contains("/Count 3 >>"))                          // three headings in the outline
     }
     Test it("fills in inline code, in order with the chunks") {
         md = "---\ntitle: Year `{clay} 2026`\n---\n```clay\nxs = [1, 2, 3]\n```\nSum `{clay} xs sum`, mean `{clay} Knit fixed(xs sum / 3.0, 1)`.\n\n| n |\n|---|\n| `{clay} xs filter { |v| v > 1 }` |\n\n```clay\nxs = [10]\n```\nNow `{clay} xs sum`.\n"
@@ -427,8 +439,9 @@ Test describe("HTML") {
         md = "See @fig-a and @tbl-b.\n\n```{clay #fig-a caption=\"Squares\" out.width=50% fig.align=left interactive=false}\nPlot plot([1, 4])\n```\n\n| x | y |\n|:-:|--:|\n| 1 | 2 |\n\nTable: Numbers. {#tbl-b}\n\n![A dot](dot.png){width=3in}\n\n![](missing.png)\n"
         File write(dir + "/n.md", md)
         page = File read(Knit render(dir + "/n.md", #{output: dir + "/n.htm"}))
-        Test assertTrue(page contains("See Figure 1 and Table 1."))
-        Test assertTrue(page contains("<figure class=\"left\" style=\"width:50%;\">"))
+        Test assertTrue(page contains("See <a href=\"#fig-a\">Figure 1</a> and <a href=\"#tbl-b\">Table 1</a>."))
+        Test assertTrue(page contains("<figure id=\"fig-a\" class=\"left\" style=\"width:50%;\">"))
+        Test assertTrue(page contains("<div class=\"table\" id=\"tbl-b\">"))
         Test assertTrue(page contains("<figcaption><strong>Figure 1:</strong> Squares</figcaption>"))
         Test assertFalse(page contains("<script"))                         // interactive=false
         Test assertTrue(page contains("<p class=\"caption\"><strong>Table 1:</strong> Numbers.</p>"))

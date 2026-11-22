@@ -7,9 +7,9 @@
       "resolved": "353c5278d36af4d935cec7b1608e05655745fa7c"
     },
     "pdf": {
-      "url": "github.com/mseminatore/clay-pdf@v0.2.0",
-      "version": "v0.2.0",
-      "resolved": "028a51ece685a350446cc9bf5eba49d267a0e6f5"
+      "url": "github.com/mseminatore/clay-pdf@v0.3.0",
+      "version": "v0.3.0",
+      "resolved": "c9da48bb49672558b227aa7f7b1ac7a70f7e0dd0"
     },
     "image": {
       "url": "github.com/mseminatore/clay-image@v0.4.0",

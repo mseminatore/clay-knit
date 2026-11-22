@@ -24,7 +24,8 @@
 // runs(text, bold) turns inline Markdown into runs for clay-pdf's wrapRuns:
 // **bold**, *italic* (or _italic_), `code`, [links](url), $math$ and
 // \-escapes. A run is [text, font, color], or with options fourth: a link's
-// #{url:}, math's #{scale:, rise:, math: true} (laid out by clay-plot's
+// #{url:} (or #{dest:} for [text](#id) and @label references, within the
+// report), math's #{scale:, rise:, math: true} (laid out by clay-plot's
 // PlotMath; for PDF, its symbols in the Symbol font, unless forPdf(false)).
 
 KnitMarkdown = Object clone {
@@ -257,7 +258,9 @@ KnitMarkdown = Object clone {
                     label = ref at(0)
                     name = (_refs != nil) ifTrue { _refs get(label) } ifFalse { nil }
                     (name != nil) ifTrue {
-                        buf = buf + (name bytes)
+                        // "Figure 2", a link to the figure
+                        flush value
+                        out push([name, KnitMarkdown _font(bold || strong, em), color, #{dest: label}])
                         i = ref at(1)
                         handled = true
                     } ifFalse {
@@ -315,7 +318,10 @@ KnitMarkdown = Object clone {
                     (end > 0) ifTrue {
                         flush value
                         // the url too, for HTML (clay-pdf's runs use the first three)
-                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4", #{url: text slice(mid + 2, end)}])
+                        target = text slice(mid + 2, end)
+                        // [text](#id): a link within the report (to a heading's id, or a label)
+                        link = (target startsWith("#")) ifTrue { #{dest: target slice(1, target length)} } ifFalse { #{url: target} }
+                        out push([text slice(i + 1, mid), KnitMarkdown _font(bold || strong, em), "#1a5fb4", link])
                         i = end + 1
                         handled = true
                     }

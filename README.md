@@ -124,6 +124,14 @@ caption, numbered with the figures; `{width=50% align=left}` after it sizes and 
 `out.width` and `fig.align` do). Pages are US Letter with 1-inch
 margins and page numbers.
 
+Links are clickable in the PDF as in the web page. `[text](#id)` links within the report: to a
+heading, by its id (its text in lower case, words joined by `-`: `## Data and results` is
+`#data-and-results`), or to a figure or table by its label (`#fig-sales`). The PDF's headings
+are also its bookmarks, the outline a viewer shows beside the pages, nested by level.
+
+Figures in the PDF are vector graphics, sharp at any zoom but static: tooltips and legend
+toggles are for [HTML](#html), where figures are interactive.
+
 Tables are GitHub's: a header row, a line of `---` cells (`:--`, `:-:` and `--:` align a
 column left, center or right), and rows; the `|`s at the ends are optional, and `\|` is a `|`
 in a cell. Cells can be styled. A table is centered, each column as wide as its text; one too
@@ -197,7 +205,7 @@ show as `?`.
 ## Cross-references
 
 Label a figure or table, and write `@label` in the text for its number ("Figure 2",
-"Table 1"), before or after it:
+"Table 1"), before or after it; in the PDF and the web page the number is a link to it:
 
 ````markdown
 @fig-sales shows the totals in @tbl-sales.
@@ -244,8 +252,8 @@ format: html
 
 Everything else is as in the PDF: chunk options, figure sizes (`out.width` becomes the figure's
 CSS width, so it scales with the window), captions and numbering, cross-references, tables and
-inline code. Headings get ids from their text (`## Data and results` is `#data-and-results`),
-for links into the page. A figure is drawn at its own size and scaled down to fit a narrow
+inline code, links (`[text](#id)` to a heading or a label). Headings get ids from their text
+(`## Data and results` is `#data-and-results`), for links into the page. A figure is drawn at its own size and scaled down to fit a narrow
 window; code that is too wide scrolls rather than wraps.
 
 ## Not yet

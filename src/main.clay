@@ -436,6 +436,12 @@ KnitDoc = Object clone {
         _pdf save(_out)
     }
 
+    // A labelled figure, image or table: a place its @label references jump to
+    _anchorLabel(b) {
+        label = b get("label")
+        (label != nil) ifTrue { _flow anchor(label) }
+    }
+
     // The @fig-x and @tbl-x references to labels nobody has
     _warnMissing() {
         (KnitMarkdown missing) each { |label|
@@ -547,6 +553,10 @@ KnitDoc = Object clone {
         _flow space([14, 12, 10, 8, 8, 8] at(level - 1))
         // keep a heading with the first lines after it
         _flow ensure(size * 1.25 + _size * 3)
+        // a bookmark in the PDF's outline, and a place [text](#id) links jump to
+        plain = KnitMarkdown plain(text)
+        _flow anchor(KnitHtml slug(plain))
+        _flow bookmark(plain, level)
         _flow font("Helvetica-Bold", size) lineHeight(size * 1.25) color(nil)
         _flow richParagraph(KnitMarkdown runs(text, true))
         _flow space(4)
@@ -669,6 +679,7 @@ KnitDoc = Object clone {
         // keep the caption and header with the first row
         page = _flow ensure(capH + ((head != nil) ifTrue { head at(1) } ifFalse { 0 }) +
             ((rows size > 0) ifTrue { (self _tableCells(rows first, widths, pad, size, lh)) at(1) } ifFalse { 0 }))
+        self _anchorLabel(b)
         self _drawCaption(caption)
         (capH > 0) ifTrue { _flow space(4) }
         self _tableHead(head, widths, aligns, cut, x0, x1, pad, size, lh)
@@ -752,6 +763,7 @@ KnitDoc = Object clone {
         h = w * (fig heightIn / (fig widthIn * 1.0))
         x = self _alignX(w, b get("align"))
         page = self _figureSpace(h, b, x, w, b get("align"))
+        self _anchorLabel(b)
         fig drawPdf(page, x, _flow y, w)
         self _figureEnd(h)
     }
@@ -822,6 +834,7 @@ KnitDoc = Object clone {
         align = (b get("align")) ?? (self _defaultOpt("fig.align"))
         x = self _alignX(w, align)
         page = self _figureSpace(h, b, x, w, align)
+        self _anchorLabel(b)
         page image(img, x, _flow y, w, h)
         self _figureEnd(h)
     }

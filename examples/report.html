@@ -35,7 +35,7 @@ hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;
 <p class="date">11-21-2026</p>
 </header>
 <h1 id="introduction">Introduction</h1>
-<p>This report is <em>Markdown</em> with <strong>Clay chunks</strong>. Each chunk runs, and the report shows its code, what it printed and its figure. Inline <code>code</code>, <a href="https://example.com">links</a> and <strong><em>bold italics</em></strong> work too.</p>
+<p>This report is <em>Markdown</em> with <strong>Clay chunks</strong>. Each chunk runs, and the report shows its code, what it printed and its figure. Inline <code>code</code>, <a href="https://example.com">links</a> (also to a heading: <a href="#math">the math</a>) and <strong><em>bold italics</em></strong> work too.</p>
 <ul>
 <li>chunks share variables, like one script</li>
 <li>output is captured with <code>Console capture</code><ul>
@@ -52,13 +52,13 @@ ys = xs map { |x| Math sin(x) * Math exp(0 - x / 6) }
 (&quot;peak: &quot; + (ys reduce(0) { |m, y| Math max(m, y) }) toString) println</code></pre>
 <pre class="output"><code>points: 41
 peak: 0.77684987</code></pre>
-<p>The data has 41 points and peaks at 0.777. The next chunk plots it, as Figure 1.</p>
+<p>The data has 41 points and peaks at 0.777. The next chunk plots it, as <a href="#fig-sine">Figure 1</a>.</p>
 <pre class="code"><code class="language-clay">Plot figure(#{figsize: [6, 3]})
 Plot plot(xs, ys, #{label: &quot;damped sine&quot;})
 Plot title(&quot;A damped sine&quot;)
 Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
-<figure>
-<svg id="plt0e7fdce725d9" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="300" viewBox="0 0 600 300" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">
+<figure id="fig-sine">
+<svg id="plta25991560246" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="300" viewBox="0 0 600 300" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
 <line x1="84.35" y1="37.5" x2="84.35" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
 <line x1="179.3" y1="37.5" x2="179.3" y2="245.14" fill="none" stroke="#b0b0b0" stroke-width="1.11"/>
@@ -115,7 +115,7 @@ Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
 <text x="480.44" y="61.94" font-size="13.89">damped sine</text>
 </g>
 <script type="text/javascript">//<![CDATA[
-(function(){var svg=document.getElementById("plt0e7fdce725d9");if(!svg)return;var D={a:[[60.62,37.5,522.21,207.64]],t:[[0,0,1,84.35,165.33,["damped sine","x: 0","y: 0"],"#1f77b4"],
+(function(){var svg=document.getElementById("plta25991560246");if(!svg)return;var D={a:[[60.62,37.5,522.21,207.64]],t:[[0,0,1,84.35,165.33,["damped sine","x: 0","y: 0"],"#1f77b4"],
 [0,0,1,96.22,129.16,["damped sine","x: 0.25","y: 0.2373"],"#1f77b4"],
 [0,0,1,108.09,98.11,["damped sine","x: 0.5","y: 0.4411"],"#1f77b4"],
 [0,0,1,119.96,73.65,["damped sine","x: 0.75","y: 0.6015"],"#1f77b4"],
@@ -167,7 +167,7 @@ Plot xlabel(&quot;x&quot;); Plot legend; Plot grid(true)</code></pre>
 System exit(1)</code></pre>
 <hr>
 <h3 id="a-table">A table</h3>
-<div class="table">
+<div class="table" id="tbl-options">
 <p class="caption"><strong>Table 1:</strong> Chunk options.</p>
 <table>
 <thead><tr><th>Chunk option</th><th style="text-align:center">Default</th><th>Effect</th></tr></thead>
@@ -185,7 +185,7 @@ System exit(1)</code></pre>
 <tr><td style="text-align:right">2</td><td style="text-align:right">4</td><td style="text-align:right">8</td></tr>
 <tr><td style="text-align:right">10</td><td style="text-align:right">100</td><td style="text-align:right">1000</td></tr>
 </tbody></table></div>
-<p>Table 1 lists the chunk options, and Figure 1 is the plot from earlier. A chunk with <code>results=asis</code> prints Markdown, and <code>Knit table</code> makes a table from data:</p>
+<p><a href="#tbl-options">Table 1</a> lists the chunk options, and <a href="#fig-sine">Figure 1</a> is the plot from earlier. A chunk with <code>results=asis</code> prints Markdown, and <code>Knit table</code> makes a table from data:</p>
 <pre class="code"><code class="language-clay">rows = (1..5) map { |i| #{n: i, root: Math sqrt(i), even: (i % 2 == 0) ifTrue { &quot;yes&quot; } ifFalse { &quot;no&quot; }} }
 Knit table(rows, #{digits: 3, caption: &quot;Square roots, from `Knit table`.&quot;}) println</code></pre>
 <div class="table">

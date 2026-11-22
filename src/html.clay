@@ -119,6 +119,8 @@ KnitHtml = Object clone {
         color = (r size > 2) ifTrue { r at(2) } ifFalse { nil }
         opts = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
         url = (opts == nil) ifTrue { nil } ifFalse { opts get("url") }
+        dest = (opts == nil) ifTrue { nil } ifFalse { opts get("dest") }
+        (dest != nil) ifTrue { url = "#" + dest }
         (font == "Courier") ifTrue { text = "<code>" + text + "</code>" } ifFalse {
             (font contains("Oblique")) ifTrue { text = "<em>" + text + "</em>" }
             (font contains("Bold")) ifTrue { text = "<strong>" + text + "</strong>" }
@@ -168,7 +170,7 @@ KnitHtml = Object clone {
     }
 
     table(b) {
-        out = ["<div class=\"table\">\n"]
+        out = ["<div class=\"table\"" + (KnitHtml idAttr(b get("label"))) + ">\n"]
         // the caption above, as wide as the text (a <caption> is only as wide as the table)
         (b get("number") != nil) ifTrue { out push("<p class=\"caption\">" + (KnitHtml caption(b get("number"), b get("caption"))) + "</p>\n") }
         out push("<table>\n")
@@ -224,7 +226,7 @@ KnitHtml = Object clone {
         }
         tag = "<img src=\"data:" + mime + ";base64," + (PlotSvg base64(File read(full))) + "\" alt=\"" + (KnitHtml esc(b get("alt") ?? "")) + "\">"
         bb = #{width: (b get("width")) ?? (doc _defaultOpt("out.width")), align: (b get("align")) ?? (doc _defaultOpt("fig.align")),
-               number: b get("number")}
+               number: b get("number"), label: b get("label")}
         KnitHtml figureBox(tag, bb, b get("alt"))
     }
 
@@ -236,8 +238,12 @@ KnitHtml = Object clone {
         a = ((b get("align") ?? "center") toString) lower
         cls = ((a == "left") || (a == "right")) ifTrue { " class=\"" + a + "\"" } ifFalse { "" }
         cap = (b get("number") != nil) ifTrue { "<figcaption>" + (KnitHtml caption(b get("number"), text)) + "</figcaption>\n" } ifFalse { "" }
-        "<figure" + cls + ((style == "") ifTrue { "" } ifFalse { " style=\"" + style + "\"" }) + ">\n" + content + cap + "</figure>\n"
+        "<figure" + (KnitHtml idAttr(b get("label"))) + cls + ((style == "") ifTrue { "" } ifFalse { " style=\"" + style + "\"" }) + ">\n" +
+            content + cap + "</figure>\n"
     }
+
+    // id="label" for a labelled figure or table (where @label links go), or nothing
+    idAttr(label) { (label == nil) ifTrue { "" } ifFalse { " id=\"" + (KnitHtml esc(label)) + "\"" } }
 
     // out.width as CSS: 50%, 3in, 8cm, 60mm, 200pt, 300px (a plain number is pixels)
     cssLength(w) {
