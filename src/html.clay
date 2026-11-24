@@ -51,7 +51,7 @@ KnitHtml = Object clone {
         (kind == "image") ifTrue { return KnitHtml image(doc, b) }
         (kind == "figure") ifTrue { return KnitHtml figure(b) }
         (kind == "rule") ifTrue { return "<hr>\n" }
-        (kind == "math") ifTrue { return "<p class=\"math display\">" + (KnitHtml runs(KnitMarkdown runs("$" + (b get("text")) + "$"))) + "</p>\n" }
+        (kind == "math") ifTrue { return "<p class=\"math display\">" + (KnitHtml runs(KnitMarkdown runs("$$" + (b get("text")) + "$$"))) + "</p>\n" }
         ""
     }
 
@@ -68,18 +68,34 @@ KnitHtml = Object clone {
 
     // Styled runs ([text, font, color, options]) as HTML; math runs (in a row)
     // as one <span class="math">, each piece sized and raised as PlotMath laid it out
+    // The pieces of a stack (the limits of a display sum, option stack:
+    // "column:row") are one <span class="stack">, a one-cell grid whose rows
+    // (a <span> each) lie over each other, centered, each piece raised as laid out
     runs(rs) {
         out = []
         inMath = false
+        col = nil
+        row = nil
         rs each { |r|
             opts = (r size > 3) ifTrue { r at(3) } ifFalse { nil }
             isMath = (opts != nil) && ((opts get("math")) == true)
+            st = (isMath ifTrue { opts get("stack") } ifFalse { nil })
+            stCol = (st == nil) ifTrue { nil } ifFalse { (st split(":")) at(0) }
+            stRow = (st == nil) ifTrue { nil } ifFalse { (st split(":")) at(1) }
+            (row != nil && (row != stRow || col != stCol)) ifTrue { out push("</span>"); row = nil }
+            (col != nil && col != stCol) ifTrue { out push("</span>"); col = nil }
             (isMath != inMath) ifTrue {
                 out push(isMath ifTrue { "<span class=\"math\">" } ifFalse { "</span>" })
                 inMath = isMath
             }
+            (st != nil) ifTrue {
+                (col == nil) ifTrue { out push("<span class=\"stack\">"); col = stCol }
+                (row == nil) ifTrue { out push("<span>"); row = stRow }
+            }
             out push(isMath ifTrue { KnitHtml mathPiece(r) } ifFalse { KnitHtml run(r) })
         }
+        (row != nil) ifTrue { out push("</span>") }
+        (col != nil) ifTrue { out push("</span>") }
         inMath ifTrue { out push("</span>") }
         out join("")
     }
@@ -297,6 +313,6 @@ KnitHtml = Object clone {
         "thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}\n" +
         "thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}\n" +
         "hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}\n" +
-        ".math{white-space:nowrap}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}\n"
+        ".math{white-space:nowrap}.math .stack{display:inline-grid;justify-items:center;align-items:baseline}.math .stack>span{grid-area:1/1}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}\n"
     }
 }

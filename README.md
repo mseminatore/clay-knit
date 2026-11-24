@@ -165,7 +165,10 @@ It is TeX's notation as [clay-plot](https://github.com/mseminatore/clay-plot) la
 figures: `^` and `_` for super- and subscripts (they nest), Greek letters, operators and
 relations (`\leq \neq \approx \pm \times`), big operators (`\sum \prod \int \sqrt{x}`),
 arrows, sets (`\in \subset \cup \mathbb{R}`), logic (`\forall \exists \neg`), `\sin`, `\log`
-and the like upright, and `\frac{a}{b}` as a/b. Math is text, so it can be selected and
+and the like upright, and `\frac{a}{b}` as a/b. In display math (`$$...$$`, a paragraph of its
+own or inline) the limits of `\sum`, `\prod`, `\lim`, `\max`, `\min`, `\sup`, `\inf`, `\argmax` and
+`\argmin` stand above and below the operator, as TeX sets them; in `$...$` they stay beside it,
+as `\sum_{i=1}^{n}` in text. Math is text, so it can be selected and
 searched: in the PDF in Helvetica and the Symbol font, in HTML as raised and smaller text. It
 doesn't break across lines.
 
@@ -258,7 +261,8 @@ window; code that is too wide scrolls rather than wraps.
 
 ## Not yet
 
-- Stacked fractions, roots over their argument, matrices and accents in math (TeX through LaTeX)
+- Stacked fractions, roots over their argument, matrices and accents in math (TeX through LaTeX);
+  limits are stacked on sums, products and `\lim`-like operators in display math, but not on `\int`
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works

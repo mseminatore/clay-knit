@@ -305,7 +305,7 @@ KnitMarkdown = Object clone {
                 close = KnitMarkdown _mathClose(b, i + d, d)
                 (close > 0) ifTrue {
                     flush value
-                    (KnitMarkdown _mathRuns(text slice(i + d, close), bold || strong, color)) each { |r| out push(r) }
+                    (KnitMarkdown _mathRuns(text slice(i + d, close), bold || strong, color, d == 2)) each { |r| out push(r) }
                     i = close + d
                     handled = true
                 }
@@ -410,10 +410,12 @@ KnitMarkdown = Object clone {
     }
 
     // Math's runs, laid out by clay-plot's PlotMath: [text, font, color,
-    // #{scale:, rise:, math: true}]; spaces in it don't break lines
-    _mathRuns(src, bold, color) {
+    // #{scale:, rise:, math: true}] (and stack: "column:row" for the limits of
+    // a display sum, drawn over each other); spaces in it don't break lines.
+    // display ($$...$$) puts a sum's limits above and below it
+    _mathRuns(src, bold, color, display = false) {
         base = KnitMarkdown _font(bold, false)
-        pieces = PlotMath runs("$" + src + "$")
+        pieces = PlotMath runs(display ifTrue { "$$" + src + "$$" } ifFalse { "$" + src + "$" })
         _pdfMath ifTrue { pieces = PlotPdf _fontRuns(pieces) }
         out = []
         pieces each { |p|
@@ -421,7 +423,9 @@ KnitMarkdown = Object clone {
             font = ((p size > 3) && ((p at(3)) != nil)) ifTrue { p at(3) } ifFalse { base }
             // PDF's Helvetica has no minus sign (U+2212): an en dash, as clay-plot's PDF figures draw it
             (_pdfMath && (font != "Symbol")) ifTrue { t = t replace(PlotTicks minus, "\xe2\x80\x93") }
-            (t != "") ifTrue { out push([t, font, color, #{scale: p at(1), rise: p at(2), math: true}]) }
+            opts = #{scale: p at(1), rise: p at(2), math: true}
+            ((p size > 4) && ((p at(4)) != nil)) ifTrue { opts set("stack", ((p at(4)) at(0)) toString + ":" + ((p at(4)) at(1)) toString) }
+            (t != "") ifTrue { out push([t, font, color, opts]) }
         }
         (out size == 0) ifTrue { out push(["", base, color]) }
         out

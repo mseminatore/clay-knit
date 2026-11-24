@@ -455,10 +455,22 @@ Test describe("HTML") {
         File write(dir + "/m.md", "Area $\\pi r^2$, and\n\n$$\\sum_i x_i \\neq 0$$\n")
         page = File read(Knit render(dir + "/m.md", #{format: "html"}))
         Test assertTrue(page contains("<span class=\"math\">π\xc2\xa0r<span style=\"font-size:70%;position:relative;top:-0.6em;\">2</span></span>"))
-        Test assertTrue(page contains("<p class=\"math display\"><span class=\"math\">∑"))
+        Test assertTrue(page contains("<p class=\"math display\"><span class=\"math\"><span class=\"stack\"><span><span style=\"font-size:125%;position:relative;top:0.08em;\">∑</span></span>"))
         pdf = File read(Knit render(dir + "/m.md"))
         Test assertTrue(pdf contains("/BaseFont /Symbol"))
         Test assertTrue(pdf contains("Tf") && (pdf contains("(p) Tj")))                  // π is Symbol's p
+    }
+    Test it("stacks the limits of a display sum, in HTML and PDF") {
+        File write(dir + "/s.md", "Inline $\\sum_i^n x$ beside.\n\n$$\\sum_{i=1}^{n} x_i$$\n")
+        page = File read(Knit render(dir + "/s.md", #{format: "html"}))
+        Test assertEqual((page split("<span class=\"stack\">")) size, 2)             // the display one only
+        Test assertTrue(page contains("<span class=\"stack\"><span><span style=\"font-size:125%;position:relative;top:0.08em;\">∑</span></span><span>"))
+        Test assertTrue(page contains(".math .stack{display:inline-grid"))
+        rs = KnitMarkdown runs("$$\\sum_{i=1}^{n}$$")
+        Test assertEqual(rs map { |r| (r at(3)) get("stack") }, ["0:0", "0:1", "0:2"])
+        Test assertEqual((KnitMarkdown runs("$\\sum_i^n$")) map { |r| (r at(3)) get("stack") }, [nil, nil, nil])
+        pdf = File read(Knit render(dir + "/s.md"))
+        Test assertTrue(pdf startsWith("%PDF"))
     }
     Test it("takes the format from the front matter") {
         File write(dir + "/f.md", "---\nformat: html\n---\nHello.\n")

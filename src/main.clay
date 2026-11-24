@@ -515,9 +515,12 @@ KnitDoc = Object clone {
         (kind == "space") ifTrue { return _flow space(b get("height")) }
         (kind == "math") ifTrue {
             size = _size * 1.15
-            _flow font("Helvetica", size) lineHeight(size * 1.6)
+            rs = KnitMarkdown runs("$$" + (b get("text")) + "$$")
+            // limits above and below a sum need room: taller lines
+            stacked = (rs find { |r| (r size > 3) && ((r at(3)) != nil) && ((r at(3)) get("stack") != nil) }) != nil
+            _flow font("Helvetica", size) lineHeight(size * (stacked ifTrue { 2.2 } ifFalse { 1.6 }))
             _flow space(_size * 0.2)
-            _flow richParagraph(KnitMarkdown runs("$" + (b get("text")) + "$"), "center")
+            _flow richParagraph(rs, "center")
             return _flow space(_size * 0.6)
         }
         (kind == "rule") ifTrue {
