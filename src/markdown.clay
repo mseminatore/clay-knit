@@ -411,7 +411,8 @@ KnitMarkdown = Object clone {
 
     // Math's runs, laid out by clay-plot's PlotMath: [text, font, color,
     // #{scale:, rise:, math: true}] (and stack: "column:row" for the limits of
-    // a display sum, drawn over each other); spaces in it don't break lines.
+    // a display sum or fraction, drawn over each other, and rule: thickness for
+    // a fraction's bar); spaces in it don't break lines.
     // display ($$...$$) puts a sum's limits above and below it
     _mathRuns(src, bold, color, display = false) {
         base = KnitMarkdown _font(bold, false)
@@ -424,6 +425,12 @@ KnitMarkdown = Object clone {
             // PDF's Helvetica has no minus sign (U+2212): an en dash, as clay-plot's PDF figures draw it
             (_pdfMath && (font != "Symbol")) ifTrue { t = t replace(PlotTicks minus, "\xe2\x80\x93") }
             opts = #{scale: p at(1), rise: p at(2), math: true}
+            // a fraction's bar (its scale is its thickness): a rule piece, no text
+            (p at(0) == PlotMath RULE) ifTrue {
+                t = "\xc2\xa0"
+                opts set("scale", 1)
+                opts set("rule", p at(1))
+            }
             ((p size > 4) && ((p at(4)) != nil)) ifTrue { opts set("stack", ((p at(4)) at(0)) toString + ":" + ((p at(4)) at(1)) toString) }
             (t != "") ifTrue { out push([t, font, color, opts]) }
         }

@@ -90,7 +90,13 @@ KnitHtml = Object clone {
             }
             (st != nil) ifTrue {
                 (col == nil) ifTrue { out push("<span class=\"stack\">"); col = stCol }
-                (row == nil) ifTrue { out push("<span>"); row = stRow }
+                (row == nil) ifTrue {
+                    // a fraction's bar is its row: a border, raised to where the bar is
+                    out push((opts get("rule") == nil) ifTrue { "<span>" } ifFalse {
+                        "<span class=\"rule\" style=\"border-top-width:" + (KnitHtml cssNum(opts get("rule"))) + "em;top:" + (KnitHtml cssNum(0 - (opts get("rise")))) + "em;\">"
+                    })
+                    row = stRow
+                }
             }
             out push(isMath ifTrue { KnitHtml mathPiece(r) } ifFalse { KnitHtml run(r) })
         }
@@ -103,6 +109,7 @@ KnitHtml = Object clone {
     // A piece of math: its size and its rise (in its own ems, so the line keeps its height)
     mathPiece(r) {
         o = r at(3)
+        (o get("rule") != nil) ifTrue { return "" }
         scale = (o get("scale")) ?? 1
         rise = (o get("rise")) ?? 0
         text = KnitHtml esc(r at(0))
@@ -313,6 +320,6 @@ KnitHtml = Object clone {
         "thead th{border-top:1.5px solid #000;border-bottom:1px solid #000}tbody tr:last-child td{border-bottom:1.5px solid #000}\n" +
         "thead+tbody tr:first-child td{border-top:none}table:not(:has(thead)) tbody tr:first-child td{border-top:1.5px solid #000}\n" +
         "hr{border:none;border-top:1px solid #c0c0c0;margin:2em 0}.missing{color:#aa0000;font-weight:bold}\n" +
-        ".math{white-space:nowrap}.math .stack{display:inline-grid;justify-items:center;align-items:baseline}.math .stack>span{grid-area:1/1}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}\n"
+        ".math{white-space:nowrap}.math .stack{display:inline-grid;justify-items:center;align-items:baseline}.math .stack>span{grid-area:1/1}.math .stack>span.rule{justify-self:stretch;height:0;border-top:solid currentColor;position:relative}p.math.display:has(.stack){padding:.45em 0}p.math.display{text-align:center;font-size:1.15em;margin:1em 0}\n"
     }
 }

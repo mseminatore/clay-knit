@@ -165,17 +165,19 @@ It is TeX's notation as [clay-plot](https://github.com/mseminatore/clay-plot) la
 figures: `^` and `_` for super- and subscripts (they nest), Greek letters, operators and
 relations (`\leq \neq \approx \pm \times`), big operators (`\sum \prod \int \sqrt{x}`),
 arrows, sets (`\in \subset \cup \mathbb{R}`), logic (`\forall \exists \neg`), `\sin`, `\log`
-and the like upright, and `\frac{a}{b}` as a/b. In display math (`$$...$$`, a paragraph of its
-own or inline) the limits of `\sum`, `\prod`, `\lim`, `\max`, `\min`, `\sup`, `\inf`, `\argmax` and
-`\argmin` stand above and below the operator, as TeX sets them; in `$...$` they stay beside it,
-as `\sum_{i=1}^{n}` in text. Math is text, so it can be selected and
+and the like upright. In display math (`$$...$$`, a paragraph of its own or inline) `\frac{a}{b}`
+(or `\dfrac`) is stacked, a over b with a bar between, and the limits of `\sum`, `\prod`, `\lim`,
+`\max`, `\min`, `\sup`, `\inf`, `\argmax` and `\argmin` stand above and below the operator, as TeX
+sets them; in `$...$` a fraction is a/b and the limits stay beside the operator, as
+`\sum_{i=1}^{n}` in text. Inside a stacked part (a numerator, a limit) they are in line again, so
+`\frac{\frac{a}{b}}{c}` shows a/b over c. Math is text, so it can be selected and
 searched: in the PDF in Helvetica and the Symbol font, in HTML as raised and smaller text. It
 doesn't break across lines.
 
 A `$` opens math only before a non-space, and closes it only after a non-space and not before a
 digit, as Pandoc reads it, so `$5 and $10` is text; `\$` is a dollar sign. Math in `code` is
-code. There are no stacked fractions, roots over their argument, matrices or accents (`\hat{y}`
-shows y): for those, draw the formula in a figure, or write it out.
+code. There are no roots over their argument, matrices or accents (`\hat{y}` shows y): for
+those, draw the formula in a figure, or write it out.
 
 ### Tables from data
 
@@ -261,8 +263,9 @@ window; code that is too wide scrolls rather than wraps.
 
 ## Not yet
 
-- Stacked fractions, roots over their argument, matrices and accents in math (TeX through LaTeX);
-  limits are stacked on sums, products and `\lim`-like operators in display math, but not on `\int`
+- Roots over their argument, matrices and accents in math (TeX through LaTeX); stacking applies to
+  fractions and to the limits of sums, products and `\lim`-like operators in display math, not
+  to `\int`, nested fractions or limits inside another stacked part
 - Keeping going after an error (knitr's `error=TRUE`)
 
 ## How it works
