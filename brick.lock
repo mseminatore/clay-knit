@@ -2,9 +2,9 @@
   "lockfile_version": 1,
   "locked": {
     "plot": {
-      "url": "github.com/mseminatore/clay-plot@v0.9.3",
-      "version": "v0.9.3",
-      "resolved": "3685a296d0e5d7af7bb3dee91adc3de94fea364b"
+      "url": "github.com/mseminatore/clay-plot@v0.9.4",
+      "version": "v0.9.4",
+      "resolved": "ec5657fe881da469e27b503ea187839ec18aadf7"
     },
     "pdf": {
       "url": "github.com/mseminatore/clay-pdf@v0.3.2",
